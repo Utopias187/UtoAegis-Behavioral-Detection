@@ -270,6 +270,7 @@ public sealed class ThreatUpdaterEngineTests
             RequestedFiles.Add(fileName);
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
             {
+                RequestMessage = request,
                 Content = new ByteArrayContent(files[fileName])
             });
         }

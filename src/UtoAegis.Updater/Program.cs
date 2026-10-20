@@ -62,16 +62,16 @@ internal static class Program
         builder.Services.AddSingleton(configuration);
         builder.Services.AddSingleton(trustStore);
         builder.Services.AddSingleton(TimeProvider.System);
-        builder.Services.AddSingleton(_ => new HttpClientHandler
+        builder.Services.AddSingleton(_ =>
         {
-            AllowAutoRedirect = false,
-            AutomaticDecompression = DecompressionMethods.None,
-            CheckCertificateRevocationList = true,
-            UseCookies = false
-        });
-        builder.Services.AddSingleton(services =>
-        {
-            var client = new HttpClient(services.GetRequiredService<HttpClientHandler>())
+            var handler = new HttpClientHandler
+            {
+                AllowAutoRedirect = false,
+                AutomaticDecompression = DecompressionMethods.None,
+                CheckCertificateRevocationList = true,
+                UseCookies = false
+            };
+            var client = new HttpClient(handler)
             {
                 Timeout = configuration.RequestTimeout
             };

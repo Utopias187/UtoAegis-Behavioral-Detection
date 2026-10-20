@@ -136,6 +136,23 @@ public sealed class RemoteThreatBundleDownloaderTests
     }
 
     [TestMethod]
+    public async Task DownloadAsync_ResponseFromDifferentUri_RejectsChannelCrossing()
+    {
+        var downloader = CreateDownloader(new CrossChannelHandler());
+        var root = Path.Combine(_testDirectory, "downloads");
+
+        var exception = await Assert.ThrowsExactlyAsync<ThreatUpdateDownloadException>(async () =>
+            await downloader.DownloadAsync(
+                new Uri("https://updates.example.test/stable/"),
+                root,
+                highestAcceptedSequence: 6));
+
+        Assert.IsFalse(exception.IsTransient);
+        StringAssert.Contains(exception.Message, "channel boundary");
+        Assert.HasCount(0, Directory.GetFileSystemEntries(root));
+    }
+
+    [TestMethod]
     [DataRow("http://updates.example.test/stable/")]
     [DataRow("https://user:secret@updates.example.test/stable/")]
     [DataRow("https://updates.example.test/stable")]
@@ -213,14 +230,32 @@ public sealed class RemoteThreatBundleDownloaderTests
             RequestedFiles.Add(fileName);
             if (failureStatus.HasValue)
             {
-                return Task.FromResult(new HttpResponseMessage(failureStatus.Value));
+                return Task.FromResult(new HttpResponseMessage(failureStatus.Value)
+                {
+                    RequestMessage = request
+                });
             }
 
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
             {
+                RequestMessage = request,
                 Content = new ByteArrayContent(files[fileName])
             });
         }
+    }
+
+    private sealed class CrossChannelHandler : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                RequestMessage = new HttpRequestMessage(
+                    HttpMethod.Get,
+                    "https://other.example.test/manifest.json"),
+                Content = new ByteArrayContent([1])
+            });
     }
 
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider

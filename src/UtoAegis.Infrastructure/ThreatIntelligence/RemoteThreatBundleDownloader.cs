@@ -125,9 +125,8 @@ public sealed class RemoteThreatBundleDownloader : IRemoteThreatBundleDownloader
         long? expectedLength,
         CancellationToken cancellationToken)
     {
-        using var request = new HttpRequestMessage(
-            HttpMethod.Get,
-            new Uri(channelBaseUri, fileName));
+        var expectedUri = new Uri(channelBaseUri, fileName);
+        using var request = new HttpRequestMessage(HttpMethod.Get, expectedUri);
         request.Headers.AcceptEncoding.Clear();
 
         HttpResponseMessage response;
@@ -155,6 +154,18 @@ public sealed class RemoteThreatBundleDownloader : IRemoteThreatBundleDownloader
 
         using (response)
         {
+            if (response.RequestMessage?.RequestUri is not Uri finalUri ||
+                !string.Equals(
+                    finalUri.AbsoluteUri,
+                    expectedUri.AbsoluteUri,
+                    StringComparison.Ordinal))
+            {
+                throw new ThreatUpdateDownloadException(
+                    $"Downloading '{fileName}' crossed the configured channel boundary.",
+                    isTransient: false,
+                    response.StatusCode);
+            }
+
             if (response.StatusCode != HttpStatusCode.OK)
             {
                 throw new ThreatUpdateDownloadException(
