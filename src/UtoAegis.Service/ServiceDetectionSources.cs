@@ -6,9 +6,11 @@ internal sealed record ServiceDetectionSources(
     string? DatabasePath,
     string? SignaturePath,
     IServiceThreatContentSource? ManagedSource,
-    ThreatContentSnapshot? ManagedSnapshot)
+    IServiceThreatContentLease? ManagedContent) : IDisposable
 {
-    public bool IsManagedContent => ManagedSnapshot is not null;
+    public bool IsManagedContent => ManagedContent is not null;
+
+    public ThreatContentSnapshot? ManagedSnapshot => ManagedContent?.Snapshot;
 
     public string? ContentVersion => ManagedSnapshot?.Manifest.Version;
 
@@ -37,12 +39,14 @@ internal sealed record ServiceDetectionSources(
             cancellationToken).ConfigureAwait(false);
         var verifier = new SignedThreatBundleVerifier(trustStore);
         var contentStore = new ThreatContentStore(configuration.ContentStorePath, verifier);
-        var snapshot = await contentStore.GetActiveReadOnlyAsync(cancellationToken)
-            .ConfigureAwait(false);
+        var source = new ServiceThreatContentSource(contentStore);
+        var content = await source.GetActiveAsync(cancellationToken).ConfigureAwait(false);
         return new ServiceDetectionSources(
-            snapshot.ReputationDatabasePath,
-            snapshot.SignatureRulesPath,
-            new ServiceThreatContentSource(contentStore),
-            snapshot);
+            content.Snapshot.ReputationDatabasePath,
+            content.Snapshot.SignatureRulesPath,
+            source,
+            content);
     }
+
+    public void Dispose() => ManagedContent?.Dispose();
 }

@@ -4,7 +4,7 @@ using UtoAegis.Infrastructure.ThreatIntelligence;
 
 namespace UtoAegis.Service;
 
-internal sealed class ServiceThreatContentReloader
+internal sealed class ServiceThreatContentReloader : IDisposable
 {
     private readonly IServiceThreatContentSource _source;
     private readonly Func<ThreatContentSnapshot, CancellationToken, ValueTask<IFileScanner>>
@@ -14,18 +14,19 @@ internal sealed class ServiceThreatContentReloader
 
     public ServiceThreatContentReloader(
         IServiceThreatContentSource source,
-        ThreatContentSnapshot initialSnapshot,
+        IServiceThreatContentLease initialContent,
         IFileScanner initialScanner,
         Func<ThreatContentSnapshot, CancellationToken, ValueTask<IFileScanner>> scannerFactory)
     {
         ArgumentNullException.ThrowIfNull(source);
-        ArgumentNullException.ThrowIfNull(initialSnapshot);
+        ArgumentNullException.ThrowIfNull(initialContent);
         ArgumentNullException.ThrowIfNull(initialScanner);
         ArgumentNullException.ThrowIfNull(scannerFactory);
         _source = source;
         _scannerFactory = scannerFactory;
-        _active = ThreatContentIdentity.From(initialSnapshot);
-        Scanner = new ReloadableFileScanner(initialScanner);
+        _active = ThreatContentIdentity.From(initialContent.Snapshot);
+        Scanner = new ReloadableFileScanner(
+            new ServiceLeasedFileScanner(initialScanner, initialContent));
     }
 
     public ReloadableFileScanner Scanner { get; }
@@ -49,6 +50,7 @@ internal sealed class ServiceThreatContentReloader
         CancellationToken cancellationToken = default)
     {
         LastCheckedUtc = DateTimeOffset.UtcNow;
+        IServiceThreatContentLease? candidateContent = null;
         try
         {
             var status = await _source.GetStatusAsync(cancellationToken).ConfigureAwait(false);
@@ -69,7 +71,9 @@ internal sealed class ServiceThreatContentReloader
                 return ThreatContentReloadResult.Unchanged(_active);
             }
 
-            var snapshot = await _source.GetActiveAsync(cancellationToken).ConfigureAwait(false);
+            candidateContent = await _source.GetActiveAsync(cancellationToken)
+                .ConfigureAwait(false);
+            var snapshot = candidateContent.Snapshot;
             candidateIdentity = ThreatContentIdentity.From(snapshot);
             if (candidateIdentity == _active)
             {
@@ -79,7 +83,10 @@ internal sealed class ServiceThreatContentReloader
 
             var candidateScanner = await _scannerFactory(snapshot, cancellationToken)
                 .ConfigureAwait(false);
-            Scanner.Replace(candidateScanner);
+            Scanner.Replace(new ServiceLeasedFileScanner(
+                candidateScanner,
+                candidateContent));
+            candidateContent = null;
             var previous = _active;
             _active = candidateIdentity;
             SuccessfulReloadCount++;
@@ -102,7 +109,25 @@ internal sealed class ServiceThreatContentReloader
             _lastFailureFingerprint = fingerprint;
             return ThreatContentReloadResult.Rejected(_active, exception.Message, shouldLog);
         }
+        finally
+        {
+            candidateContent?.Dispose();
+        }
     }
+
+    public void Dispose() => Scanner.Dispose();
+}
+
+internal sealed class ServiceLeasedFileScanner(
+    IFileScanner scanner,
+    IServiceThreatContentLease content) : IFileScanner, IDisposable
+{
+    public ValueTask<FileScanResult> ScanAsync(
+        string path,
+        CancellationToken cancellationToken = default) =>
+        scanner.ScanAsync(path, cancellationToken);
+
+    public void Dispose() => content.Dispose();
 }
 
 internal sealed record ThreatContentIdentity(string Version, long Sequence)

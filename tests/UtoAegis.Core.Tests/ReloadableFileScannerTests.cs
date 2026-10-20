@@ -35,6 +35,22 @@ public sealed class ReloadableFileScannerTests
         Assert.AreEqual("second", currentResult.Path);
     }
 
+    [TestMethod]
+    public async Task Replace_InFlightDisposableScannerRetiresAfterScanCompletes()
+    {
+        var first = new BlockingScanner("first");
+        using var scanner = new ReloadableFileScanner(first);
+        var pendingScan = scanner.ScanAsync("sample.bin").AsTask();
+        await first.Started.Task;
+
+        scanner.Replace(new StubScanner("second"));
+        Assert.IsFalse(first.IsDisposed);
+
+        first.Release.SetResult();
+        await pendingScan;
+        Assert.IsTrue(first.IsDisposed);
+    }
+
     private static FileScanResult Result(string path) =>
         new(
             FileHashScanResult.Failure(
@@ -53,13 +69,15 @@ public sealed class ReloadableFileScannerTests
             ValueTask.FromResult(Result(resultPath));
     }
 
-    private sealed class BlockingScanner(string resultPath) : IFileScanner
+    private sealed class BlockingScanner(string resultPath) : IFileScanner, IDisposable
     {
         public TaskCompletionSource Started { get; } =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public TaskCompletionSource Release { get; } =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public bool IsDisposed { get; private set; }
 
         public async ValueTask<FileScanResult> ScanAsync(
             string path,
@@ -69,5 +87,7 @@ public sealed class ReloadableFileScannerTests
             await Release.Task.WaitAsync(cancellationToken);
             return Result(resultPath);
         }
+
+        public void Dispose() => IsDisposed = true;
     }
 }

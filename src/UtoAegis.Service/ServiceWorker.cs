@@ -25,6 +25,7 @@ internal sealed class ServiceWorker(
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         FileSystemQuarantineStore? quarantineStore = null;
+        ServiceThreatContentReloader? contentReloader = null;
         try
         {
             var initialScanner = await CreateScannerAsync(
@@ -32,13 +33,12 @@ internal sealed class ServiceWorker(
                 detectionSources.SignaturePath,
                 initializeReputationStore: !detectionSources.IsManagedContent,
                 stoppingToken);
-            ServiceThreatContentReloader? contentReloader = null;
             IFileScanner scanner = initialScanner;
             if (detectionSources.IsManagedContent)
             {
                 contentReloader = new ServiceThreatContentReloader(
                     detectionSources.ManagedSource!,
-                    detectionSources.ManagedSnapshot!,
+                    detectionSources.ManagedContent!,
                     initialScanner,
                     CreateManagedScannerAsync);
                 scanner = contentReloader.Scanner;
@@ -163,6 +163,7 @@ internal sealed class ServiceWorker(
         }
         finally
         {
+            contentReloader?.Dispose();
             quarantineStore?.Dispose();
         }
     }

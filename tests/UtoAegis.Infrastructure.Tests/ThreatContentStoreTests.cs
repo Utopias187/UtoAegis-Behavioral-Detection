@@ -13,6 +13,7 @@ public sealed class ThreatContentStoreTests
 {
     private static readonly string[] TwoDeletedVersions = ["2026.10.7", "2026.10.8"];
     private static readonly string[] OneDeletedVersion = ["2026.10.7"];
+    private static readonly string[] LeasedDeletedVersions = ["2026.10.8"];
     private static readonly DateTimeOffset Now =
         new(2026, 10, 17, 18, 0, 0, TimeSpan.Zero);
 
@@ -153,6 +154,29 @@ public sealed class ThreatContentStoreTests
         Assert.AreEqual(7L, active.Manifest.Sequence);
         Assert.HasCount(0, before);
         Assert.HasCount(0, after);
+    }
+
+    [TestMethod]
+    public async Task GetActiveLeasedReadOnlyAsync_PruneRetainsLeasedGeneration()
+    {
+        var store = CreateStore();
+        await store.ApplyAsync(await CreateBundleAsync(7, 'a'));
+        using var lease = await store.GetActiveLeasedReadOnlyAsync();
+        await store.ApplyAsync(await CreateBundleAsync(8, 'b'));
+        await store.ApplyAsync(await CreateBundleAsync(9, 'c'));
+        await store.ApplyAsync(await CreateBundleAsync(10, 'd'));
+
+        var result = await store.PruneAsync(maximumRetainedVersions: 2);
+
+        Assert.AreEqual(1, result.DeletedVersionCount);
+        Assert.AreEqual(3, result.RetainedVersionCount);
+        CollectionAssert.AreEqual(
+            LeasedDeletedVersions,
+            result.DeletedVersions.ToArray());
+        CollectionAssert.AreEqual(
+            OneDeletedVersion,
+            result.PinnedVersions.ToArray());
+        Assert.IsTrue(Directory.Exists(lease.Snapshot.ContentDirectory));
     }
 
     [TestMethod]

@@ -55,6 +55,7 @@ internal static class Program
                 $"response={configuration.ResponsePolicy.Mode}; " +
                 $"recursive={configuration.Recursive}; " +
                 $"content={detectionSources.ContentVersion ?? "direct"}.");
+            detectionSources.Dispose();
             return 0;
         }
 

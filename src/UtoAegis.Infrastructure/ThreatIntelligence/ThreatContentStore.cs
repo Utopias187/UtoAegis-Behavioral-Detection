@@ -149,6 +149,38 @@ public sealed class ThreatContentStore
         return CreateSnapshot(verified.Manifest, contentPath);
     }
 
+    public async ValueTask<ThreatContentReadLease> GetActiveLeasedReadOnlyAsync(
+        CancellationToken cancellationToken = default)
+    {
+        EnsureRegularDirectory(_rootPath);
+        EnsureRegularDirectory(_versionsPath);
+        var state = await ThreatContentStateFile.ReadAsync(_statePath, cancellationToken)
+            .ConfigureAwait(false) ??
+            throw new ThreatUpdateException("The threat-content store has no active version.");
+        var contentPath = GetVersionPath(state.Active);
+        FileStream? databaseHandle = null;
+        try
+        {
+            databaseHandle = OpenReadLease(contentPath);
+            var verified = await RequireVerifier().VerifyInstalledAsync(
+                contentPath,
+                state.Active.Sequence,
+                cancellationToken).ConfigureAwait(false);
+            await ValidateInstalledDatabaseAsync(
+                verified,
+                contentPath,
+                cancellationToken).ConfigureAwait(false);
+            return new ThreatContentReadLease(
+                CreateSnapshot(verified.Manifest, contentPath),
+                databaseHandle);
+        }
+        catch
+        {
+            databaseHandle?.Dispose();
+            throw;
+        }
+    }
+
     public async ValueTask<ThreatContentSnapshot> RollbackAsync(
         CancellationToken cancellationToken = default)
     {
@@ -208,7 +240,7 @@ public sealed class ThreatContentStore
             .ConfigureAwait(false);
         if (state is null)
         {
-            return new ThreatContentPruneResult(0, 0, []);
+            return new ThreatContentPruneResult(0, 0, [], []);
         }
 
         var versions = ReadStoredVersions();
@@ -241,10 +273,17 @@ public sealed class ThreatContentStore
         }
 
         var deleted = new List<string>();
+        var pinned = new List<string>();
         foreach (var version in versions.Where(version =>
             !retainedNames.Contains(version.DirectoryName)))
         {
             cancellationToken.ThrowIfCancellationRequested();
+            if (!CanDeleteVersion(version.Path))
+            {
+                pinned.Add(version.Version);
+                continue;
+            }
+
             try
             {
                 Directory.Delete(version.Path, recursive: true);
@@ -262,7 +301,8 @@ public sealed class ThreatContentStore
         return new ThreatContentPruneResult(
             deleted.Count,
             versions.Count - deleted.Count,
-            deleted);
+            deleted,
+            pinned);
     }
 
     private void PrepareDirectories()
@@ -474,6 +514,67 @@ public sealed class ThreatContentStore
 
     private string GetVersionPath(ThreatContentReference reference) =>
         Path.Combine(_versionsPath, reference.DirectoryName);
+
+    private static FileStream OpenReadLease(string contentPath)
+    {
+        try
+        {
+            return new FileStream(
+                Path.Combine(contentPath, ReputationDatabaseFileName),
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.Read,
+                bufferSize: 1,
+                FileOptions.RandomAccess);
+        }
+        catch (Exception exception) when (
+            exception is IOException or UnauthorizedAccessException)
+        {
+            throw new ThreatUpdateException(
+                "The active threat-content version could not be leased for reading.",
+                exception);
+        }
+    }
+
+    private static bool CanDeleteVersion(string contentPath)
+    {
+        var databasePath = Path.Combine(contentPath, ReputationDatabaseFileName);
+        if (!File.Exists(databasePath))
+        {
+            return true;
+        }
+
+        try
+        {
+            using var lease = new FileStream(
+                databasePath,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.None,
+                bufferSize: 1,
+                FileOptions.RandomAccess);
+            return true;
+        }
+        catch (Exception exception) when (
+            exception is FileNotFoundException or DirectoryNotFoundException)
+        {
+            return true;
+        }
+        catch (IOException exception) when (IsSharingViolation(exception))
+        {
+            return false;
+        }
+        catch (Exception exception) when (
+            exception is IOException or UnauthorizedAccessException)
+        {
+            throw new ThreatUpdateException(
+                "A stored threat-content version could not be checked for active readers.",
+                exception);
+        }
+    }
+
+    private static bool IsSharingViolation(IOException exception) =>
+        OperatingSystem.IsWindows() && (exception.HResult & 0xffff) is 32 or 33;
 
     private SignedThreatBundleVerifier RequireVerifier() =>
         _verifier ?? throw new InvalidOperationException(

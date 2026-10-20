@@ -14,9 +14,9 @@ public sealed class ServiceThreatContentReloaderTests
         var initial = CreateSnapshot(1, "one");
         var candidate = CreateSnapshot(2, "two");
         var source = new StubSource(candidate);
-        var reloader = new ServiceThreatContentReloader(
+        using var reloader = new ServiceThreatContentReloader(
             source,
-            initial,
+            new StubLease(initial),
             new StubScanner("initial"),
             (snapshot, _) => ValueTask.FromResult<IFileScanner>(
                 new StubScanner(snapshot.Manifest.Version)));
@@ -36,9 +36,9 @@ public sealed class ServiceThreatContentReloaderTests
     {
         var initial = CreateSnapshot(1, "one");
         var source = new StubSource(CreateSnapshot(2, "two"));
-        var reloader = new ServiceThreatContentReloader(
+        using var reloader = new ServiceThreatContentReloader(
             source,
-            initial,
+            new StubLease(initial),
             new StubScanner("initial"),
             (_, _) => throw new SignatureRuleFileException("candidate rejected"));
 
@@ -53,6 +53,7 @@ public sealed class ServiceThreatContentReloaderTests
         Assert.AreEqual(1L, reloader.Scanner.Generation);
         Assert.AreEqual(2L, reloader.RejectedReloadCount);
         Assert.AreEqual(1L, reloader.Health.Sequence);
+        Assert.IsTrue(source.LastLease!.IsDisposed);
     }
 
     [TestMethod]
@@ -60,9 +61,9 @@ public sealed class ServiceThreatContentReloaderTests
     {
         var initial = CreateSnapshot(1, "one");
         var factoryCalls = 0;
-        var reloader = new ServiceThreatContentReloader(
+        using var reloader = new ServiceThreatContentReloader(
             new StubSource(initial),
-            initial,
+            new StubLease(initial),
             new StubScanner("initial"),
             (_, _) =>
             {
@@ -105,6 +106,8 @@ public sealed class ServiceThreatContentReloaderTests
     private sealed class StubSource(ThreatContentSnapshot snapshot) :
         IServiceThreatContentSource
     {
+        public StubLease? LastLease { get; private set; }
+
         public ValueTask<ThreatContentStoreStatus> GetStatusAsync(
             CancellationToken cancellationToken = default) =>
             ValueTask.FromResult(new ThreatContentStoreStatus(
@@ -115,9 +118,22 @@ public sealed class ServiceThreatContentReloaderTests
                 null,
                 snapshot.Manifest.Sequence));
 
-        public ValueTask<ThreatContentSnapshot> GetActiveAsync(
-            CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult(snapshot);
+        public ValueTask<IServiceThreatContentLease> GetActiveAsync(
+            CancellationToken cancellationToken = default)
+        {
+            LastLease = new StubLease(snapshot);
+            return ValueTask.FromResult<IServiceThreatContentLease>(LastLease);
+        }
+    }
+
+    private sealed class StubLease(ThreatContentSnapshot snapshot) :
+        IServiceThreatContentLease
+    {
+        public ThreatContentSnapshot Snapshot { get; } = snapshot;
+
+        public bool IsDisposed { get; private set; }
+
+        public void Dispose() => IsDisposed = true;
     }
 
     private sealed class StubScanner(string resultPath) : IFileScanner
