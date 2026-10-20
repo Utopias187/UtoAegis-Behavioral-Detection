@@ -15,6 +15,8 @@ public sealed class ThreatUpdaterEngineTests
         new(2026, 10, 20, 7, 0, 0, TimeSpan.Zero);
     private static readonly string[] ActivatedEvents = ["checkStarted", "updateActivated"];
     private static readonly string[] CurrentEvents = ["checkStarted", "alreadyCurrent"];
+    private static readonly string[] PinnedEvents =
+        ["checkStarted", "retentionDeferred", "updateActivated"];
     private static readonly string[] MetadataFiles = ["manifest.json", "manifest.sig"];
     private static readonly string[] ExhaustedEvents =
         ["checkStarted", "retryScheduled", "retryScheduled", "updateFailed"];
@@ -128,6 +130,30 @@ public sealed class ThreatUpdaterEngineTests
     }
 
     [TestMethod]
+    public async Task RunOnceAsync_PinnedGeneration_DefersRetentionAndReportsTelemetry()
+    {
+        var configuration = CreateConfiguration(maximumRetainedVersions: 2);
+        var store = CreateStore();
+        await ApplyBundleAsync(store, 7, 'a');
+        using var lease = await store.GetActiveLeasedReadOnlyAsync();
+        await ApplyBundleAsync(store, 8, 'b');
+        await ApplyBundleAsync(store, 9, 'c');
+        var handler = new BundleHandler(CreateBundleFiles(10, 'd'));
+        var engine = new ThreatUpdaterEngine(
+            configuration,
+            new RemoteThreatBundleDownloader(new HttpClient(handler), CreateVerifier()),
+            store,
+            new UpdaterTelemetryWriter(_telemetryPath),
+            new FixedTimeProvider(Now));
+
+        var result = await engine.RunOnceAsync();
+
+        Assert.AreEqual(UpdaterRunStatus.Activated, result.Status);
+        Assert.IsTrue(Directory.Exists(lease.Snapshot.ContentDirectory));
+        CollectionAssert.AreEqual(PinnedEvents, ReadTelemetryEvents());
+    }
+
+    [TestMethod]
     public async Task RunOnceAsync_TransientFailures_RetriesWithCappedBackoffThenFails()
     {
         var configuration = CreateConfiguration();
@@ -181,7 +207,7 @@ public sealed class ThreatUpdaterEngineTests
             timeProvider: new FixedTimeProvider(Now));
     }
 
-    private UpdaterConfiguration CreateConfiguration()
+    private UpdaterConfiguration CreateConfiguration(int maximumRetainedVersions = 3)
     {
         var installDirectory = Path.Combine(_testDirectory, "install");
         var values = new Dictionary<string, string?>
@@ -194,7 +220,8 @@ public sealed class ThreatUpdaterEngineTests
             ["UtoAegisUpdater:RolloutRing"] = "pilot",
             ["UtoAegisUpdater:PollIntervalSeconds"] = "600",
             ["UtoAegisUpdater:RequestTimeoutSeconds"] = "30",
-            ["UtoAegisUpdater:MaximumRetainedVersions"] = "3",
+            ["UtoAegisUpdater:MaximumRetainedVersions"] =
+                maximumRetainedVersions.ToString(System.Globalization.CultureInfo.InvariantCulture),
             ["UtoAegisUpdater:Retry:MaximumAttempts"] = "3",
             ["UtoAegisUpdater:Retry:InitialDelaySeconds"] = "2",
             ["UtoAegisUpdater:Retry:MaximumDelaySeconds"] = "5",
@@ -204,6 +231,21 @@ public sealed class ThreatUpdaterEngineTests
         };
         var root = new ConfigurationBuilder().AddInMemoryCollection(values).Build();
         return UpdaterConfiguration.Load(root, installDirectory);
+    }
+
+    private async Task ApplyBundleAsync(
+        ThreatContentStore store,
+        long sequence,
+        char hashCharacter)
+    {
+        var bundlePath = Path.Combine(_testDirectory, $"bundle-{sequence}");
+        Directory.CreateDirectory(bundlePath);
+        foreach (var file in CreateBundleFiles(sequence, hashCharacter))
+        {
+            await File.WriteAllBytesAsync(Path.Combine(bundlePath, file.Key), file.Value);
+        }
+
+        await store.ApplyAsync(bundlePath);
     }
 
     private Dictionary<string, byte[]> CreateBundleFiles(long sequence, char hashCharacter)

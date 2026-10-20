@@ -8,5 +8,6 @@ public enum UpdaterTelemetryEvent
     UpdateActivated = 3,
     UpdateRejected = 4,
     UpdateFailed = 5,
-    RetentionFailed = 6
+    RetentionFailed = 6,
+    RetentionDeferred = 7
 }

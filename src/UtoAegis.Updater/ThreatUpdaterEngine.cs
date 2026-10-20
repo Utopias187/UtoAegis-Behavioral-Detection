@@ -84,6 +84,18 @@ public sealed class ThreatUpdaterEngine
                         _configuration.MaximumRetainedVersions,
                         cancellationToken).ConfigureAwait(false);
                     prunedCount = prune.DeletedVersionCount;
+                    if (prune.PinnedVersions.Count > 0)
+                    {
+                        await WriteTelemetryAsync(
+                            runId,
+                            UpdaterTelemetryEvent.RetentionDeferred,
+                            attempt,
+                            snapshot.Manifest.Sequence,
+                            snapshot.Manifest.Sequence,
+                            snapshot.Manifest.Version,
+                            $"Retained scanner-pinned versions: {string.Join(", ", prune.PinnedVersions)}.",
+                            cancellationToken).ConfigureAwait(false);
+                    }
                 }
                 catch (ThreatUpdateException exception)
                 {
