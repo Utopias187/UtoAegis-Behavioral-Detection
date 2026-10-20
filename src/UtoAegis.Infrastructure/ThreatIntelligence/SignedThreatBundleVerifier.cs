@@ -59,6 +59,50 @@ public sealed class SignedThreatBundleVerifier
             cancellationToken).ConfigureAwait(false);
     }
 
+    public async ValueTask<ThreatUpdateManifest> VerifyManifestAsync(
+        string bundleDirectory,
+        long highestAcceptedSequence,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(bundleDirectory);
+        ArgumentOutOfRangeException.ThrowIfNegative(highestAcceptedSequence);
+        var bundlePath = Path.GetFullPath(bundleDirectory);
+        ValidateMetadataDirectory(bundlePath);
+
+        try
+        {
+            var manifest = await ReadAuthenticatedManifestAsync(
+                bundlePath,
+                cancellationToken).ConfigureAwait(false);
+            var acceptance = _policy.Evaluate(
+                manifest,
+                highestAcceptedSequence,
+                _timeProvider.GetUtcNow());
+            if (!acceptance.IsAccepted)
+            {
+                throw new ThreatUpdateException(
+                    $"The update manifest was rejected: {acceptance.RejectionReason}.");
+            }
+
+            return manifest;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (ThreatUpdateException)
+        {
+            throw;
+        }
+        catch (Exception exception) when (
+            exception is IOException or UnauthorizedAccessException or CryptographicException)
+        {
+            throw new ThreatUpdateException(
+                "The update manifest could not be verified.",
+                exception);
+        }
+    }
+
     public async ValueTask<VerifiedThreatBundle> VerifyInstalledAndStageAsync(
         string bundleDirectory,
         string stagingDirectory,
@@ -317,6 +361,41 @@ public sealed class SignedThreatBundleVerifier
         {
             throw new ThreatUpdateException(
                 "The signed threat bundle is missing one or more required files.");
+        }
+    }
+
+    private static void ValidateMetadataDirectory(string bundlePath)
+    {
+        var directory = new DirectoryInfo(bundlePath);
+        directory.Refresh();
+        if (!directory.Exists || directory.Attributes.HasFlag(FileAttributes.ReparsePoint))
+        {
+            throw new ThreatUpdateException(
+                "The update metadata directory must be an existing regular directory.");
+        }
+
+        var requiredNames = new HashSet<string>(StringComparer.Ordinal)
+        {
+            ManifestFileName,
+            SignatureFileName
+        };
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var entry in directory.EnumerateFileSystemInfos())
+        {
+            if (entry is not FileInfo ||
+                entry.Attributes.HasFlag(FileAttributes.ReparsePoint) ||
+                !requiredNames.Contains(entry.Name) ||
+                !names.Add(entry.Name))
+            {
+                throw new ThreatUpdateException(
+                    "The update metadata directory must contain only manifest.json and manifest.sig.");
+            }
+        }
+
+        if (!names.SetEquals(requiredNames))
+        {
+            throw new ThreatUpdateException(
+                "The update metadata directory is incomplete.");
         }
     }
 
