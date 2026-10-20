@@ -89,7 +89,7 @@ public sealed class ReloadableFileScanner : IFileScanner, IDisposable
 
         public void Release()
         {
-            var shouldDispose = false;
+            bool shouldDispose;
             lock (_gate)
             {
                 _activeScans--;
@@ -105,7 +105,7 @@ public sealed class ReloadableFileScanner : IFileScanner, IDisposable
 
         public void Retire()
         {
-            var shouldDispose = false;
+            bool shouldDispose;
             lock (_gate)
             {
                 _retired = true;
