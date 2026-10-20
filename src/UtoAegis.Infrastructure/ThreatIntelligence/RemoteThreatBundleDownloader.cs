@@ -3,7 +3,7 @@ using UtoAegis.Core.ThreatIntelligence;
 
 namespace UtoAegis.Infrastructure.ThreatIntelligence;
 
-public sealed class RemoteThreatBundleDownloader
+public sealed class RemoteThreatBundleDownloader : IRemoteThreatBundleDownloader
 {
     private readonly HttpClient _httpClient;
     private readonly SignedThreatBundleVerifier _verifier;
@@ -60,6 +60,16 @@ public sealed class RemoteThreatBundleDownloader
                 SignedThreatBundleVerifier.MaximumSignatureTextLength,
                 expectedLength: null,
                 cancellationToken).ConfigureAwait(false);
+
+            var authenticatedManifest = await _verifier.AuthenticateManifestAsync(
+                bundlePath,
+                cancellationToken).ConfigureAwait(false);
+            if (authenticatedManifest.Sequence <= highestAcceptedSequence)
+            {
+                throw new ThreatUpdateSequenceException(
+                    authenticatedManifest.Sequence,
+                    highestAcceptedSequence);
+            }
 
             var manifest = await _verifier.VerifyManifestAsync(
                 bundlePath,

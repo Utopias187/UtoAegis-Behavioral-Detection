@@ -103,6 +103,37 @@ public sealed class SignedThreatBundleVerifier
         }
     }
 
+    public async ValueTask<ThreatUpdateManifest> AuthenticateManifestAsync(
+        string bundleDirectory,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(bundleDirectory);
+        var bundlePath = Path.GetFullPath(bundleDirectory);
+        ValidateMetadataDirectory(bundlePath);
+
+        try
+        {
+            return await ReadAuthenticatedManifestAsync(
+                bundlePath,
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (ThreatUpdateException)
+        {
+            throw;
+        }
+        catch (Exception exception) when (
+            exception is IOException or UnauthorizedAccessException or CryptographicException)
+        {
+            throw new ThreatUpdateException(
+                "The update manifest could not be authenticated.",
+                exception);
+        }
+    }
+
     public async ValueTask<VerifiedThreatBundle> VerifyInstalledAndStageAsync(
         string bundleDirectory,
         string stagingDirectory,
