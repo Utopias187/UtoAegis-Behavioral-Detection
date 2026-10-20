@@ -11,6 +11,8 @@ public sealed class ServiceConfiguration
 {
     public static readonly TimeSpan MinimumHealthInterval = TimeSpan.FromSeconds(10);
     public static readonly TimeSpan MaximumHealthInterval = TimeSpan.FromHours(24);
+    public static readonly TimeSpan MinimumContentReloadInterval = TimeSpan.FromSeconds(5);
+    public static readonly TimeSpan MaximumContentReloadInterval = TimeSpan.FromHours(1);
 
     private ServiceConfiguration(
         string monitorRoot,
@@ -27,6 +29,7 @@ public sealed class ServiceConfiguration
         int watcherBufferSize,
         TimeSpan debounceDelay,
         TimeSpan healthInterval,
+        TimeSpan contentReloadInterval,
         ResponsePolicy responsePolicy)
     {
         MonitorRoot = monitorRoot;
@@ -43,6 +46,7 @@ public sealed class ServiceConfiguration
         WatcherBufferSize = watcherBufferSize;
         DebounceDelay = debounceDelay;
         HealthInterval = healthInterval;
+        ContentReloadInterval = contentReloadInterval;
         ResponsePolicy = responsePolicy;
     }
 
@@ -73,6 +77,8 @@ public sealed class ServiceConfiguration
     public TimeSpan DebounceDelay { get; }
 
     public TimeSpan HealthInterval { get; }
+
+    public TimeSpan ContentReloadInterval { get; }
 
     public ResponsePolicy ResponsePolicy { get; }
 
@@ -269,6 +275,15 @@ public sealed class ServiceConfiguration
                     "HealthIntervalSeconds must be from 10 through 86400.");
             }
 
+            var contentReloadInterval = TimeSpan.FromSeconds(
+                ReadInt(section, "ContentReloadIntervalSeconds", 30));
+            if (contentReloadInterval < MinimumContentReloadInterval ||
+                contentReloadInterval > MaximumContentReloadInterval)
+            {
+                throw new ServiceConfigurationException(
+                    "ContentReloadIntervalSeconds must be from 5 through 3600.");
+            }
+
             var recursive = ReadBoolean(section, "Recursive", defaultValue: true);
             var runInitialScan = ReadBoolean(section, "RunInitialScan", defaultValue: true);
             var maximumConcurrency = ReadInt(
@@ -317,6 +332,7 @@ public sealed class ServiceConfiguration
                 watcherBufferSize,
                 debounceDelay,
                 healthInterval,
+                contentReloadInterval,
                 responsePolicy);
         }
         catch (ServiceConfigurationException)

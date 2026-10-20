@@ -51,6 +51,7 @@ public sealed class ServiceConfigurationTests
         Assert.AreEqual(Path.Combine(testDirectory, "state", "reputation.db"), result.DatabasePath);
         Assert.IsTrue(result.Recursive);
         Assert.IsTrue(result.RunInitialScan);
+        Assert.AreEqual(TimeSpan.FromSeconds(30), result.ContentReloadInterval);
     }
 
     [TestMethod]
@@ -250,6 +251,20 @@ public sealed class ServiceConfigurationTests
             ["UtoAegis:MonitorRoot"] = monitorRoot,
             ["UtoAegis:DatabasePath"] = "state/reputation.db",
             ["UtoAegis:HealthIntervalSeconds"] = "1"
+        });
+
+        Assert.ThrowsExactly<ServiceConfigurationException>(() =>
+            ServiceConfiguration.Load(configuration, testDirectory));
+    }
+
+    [TestMethod]
+    public void Load_InvalidContentReloadInterval_Throws()
+    {
+        var configuration = BuildConfiguration(new Dictionary<string, string?>
+        {
+            ["UtoAegis:MonitorRoot"] = monitorRoot,
+            ["UtoAegis:DatabasePath"] = "state/reputation.db",
+            ["UtoAegis:ContentReloadIntervalSeconds"] = "4"
         });
 
         Assert.ThrowsExactly<ServiceConfigurationException>(() =>

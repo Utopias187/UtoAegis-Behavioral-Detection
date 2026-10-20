@@ -5,12 +5,19 @@ namespace UtoAegis.Service;
 internal sealed record ServiceDetectionSources(
     string? DatabasePath,
     string? SignaturePath,
-    bool IsManagedContent,
-    string? ContentVersion,
-    long? ContentSequence,
-    string? SigningKeyId,
-    DateTimeOffset? ExpiresUtc)
+    IServiceThreatContentSource? ManagedSource,
+    ThreatContentSnapshot? ManagedSnapshot)
 {
+    public bool IsManagedContent => ManagedSnapshot is not null;
+
+    public string? ContentVersion => ManagedSnapshot?.Manifest.Version;
+
+    public long? ContentSequence => ManagedSnapshot?.Manifest.Sequence;
+
+    public string? SigningKeyId => ManagedSnapshot?.Manifest.KeyId;
+
+    public DateTimeOffset? ExpiresUtc => ManagedSnapshot?.Manifest.ExpiresUtc;
+
     public static async ValueTask<ServiceDetectionSources> ResolveAsync(
         ServiceConfiguration configuration,
         CancellationToken cancellationToken = default)
@@ -21,9 +28,6 @@ internal sealed record ServiceDetectionSources(
             return new ServiceDetectionSources(
                 configuration.DatabasePath,
                 configuration.SignaturePath,
-                false,
-                null,
-                null,
                 null,
                 null);
         }
@@ -38,10 +42,7 @@ internal sealed record ServiceDetectionSources(
         return new ServiceDetectionSources(
             snapshot.ReputationDatabasePath,
             snapshot.SignatureRulesPath,
-            true,
-            snapshot.Manifest.Version,
-            snapshot.Manifest.Sequence,
-            snapshot.Manifest.KeyId,
-            snapshot.Manifest.ExpiresUtc);
+            new ServiceThreatContentSource(contentStore),
+            snapshot);
     }
 }
