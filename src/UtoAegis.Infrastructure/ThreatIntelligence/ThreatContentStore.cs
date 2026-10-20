@@ -1,6 +1,7 @@
 using UtoAegis.Core.Reputation;
 using UtoAegis.Core.ThreatIntelligence;
 using UtoAegis.Infrastructure.Reputation;
+using System.Globalization;
 
 namespace UtoAegis.Infrastructure.ThreatIntelligence;
 
@@ -190,6 +191,80 @@ public sealed class ThreatContentStore
                 state.HighestAcceptedSequence);
     }
 
+    public async ValueTask<ThreatContentPruneResult> PruneAsync(
+        int maximumRetainedVersions,
+        CancellationToken cancellationToken = default)
+    {
+        if (maximumRetainedVersions is < 2 or > 64)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(maximumRetainedVersions),
+                "Between 2 and 64 threat-content versions may be retained.");
+        }
+
+        PrepareDirectories();
+        await using var operationLock = AcquireOperationLock();
+        var state = await ThreatContentStateFile.ReadAsync(_statePath, cancellationToken)
+            .ConfigureAwait(false);
+        if (state is null)
+        {
+            return new ThreatContentPruneResult(0, 0, []);
+        }
+
+        var versions = ReadStoredVersions();
+        var protectedNames = new HashSet<string>(StringComparer.Ordinal)
+        {
+            state.Active.DirectoryName
+        };
+        if (state.Previous is not null)
+        {
+            protectedNames.Add(state.Previous.DirectoryName);
+        }
+
+        if (protectedNames.Any(name =>
+            versions.All(version => !string.Equals(
+                version.DirectoryName,
+                name,
+                StringComparison.Ordinal))))
+        {
+            throw new ThreatUpdateException(
+                "The threat-content state references a missing version directory.");
+        }
+
+        var retainedNames = new HashSet<string>(protectedNames, StringComparer.Ordinal);
+        foreach (var version in versions
+            .Where(version => !protectedNames.Contains(version.DirectoryName))
+            .OrderByDescending(version => version.Sequence)
+            .Take(Math.Max(0, maximumRetainedVersions - protectedNames.Count)))
+        {
+            retainedNames.Add(version.DirectoryName);
+        }
+
+        var deleted = new List<string>();
+        foreach (var version in versions.Where(version =>
+            !retainedNames.Contains(version.DirectoryName)))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                Directory.Delete(version.Path, recursive: true);
+                deleted.Add(version.Version);
+            }
+            catch (Exception exception) when (
+                exception is IOException or UnauthorizedAccessException)
+            {
+                throw new ThreatUpdateException(
+                    $"Threat-content version '{version.Version}' could not be pruned.",
+                    exception);
+            }
+        }
+
+        return new ThreatContentPruneResult(
+            deleted.Count,
+            versions.Count - deleted.Count,
+            deleted);
+    }
+
     private void PrepareDirectories()
     {
         Directory.CreateDirectory(_rootPath);
@@ -198,6 +273,62 @@ public sealed class ThreatContentStore
         EnsureRegularDirectory(_versionsPath);
         Directory.CreateDirectory(_stagingPath);
         EnsureRegularDirectory(_stagingPath);
+    }
+
+    private List<StoredVersion> ReadStoredVersions()
+    {
+        var versions = new List<StoredVersion>();
+        foreach (var entry in new DirectoryInfo(_versionsPath).EnumerateFileSystemInfos())
+        {
+            if (entry is not DirectoryInfo directory ||
+                directory.Attributes.HasFlag(FileAttributes.ReparsePoint))
+            {
+                throw new ThreatUpdateException(
+                    "The threat-content versions directory contains an unsafe entry.");
+            }
+
+            const int sequenceLength = 20;
+            if (directory.Name.Length <= sequenceLength + 1 ||
+                directory.Name[sequenceLength] != '-' ||
+                !long.TryParse(
+                    directory.Name.AsSpan(0, sequenceLength),
+                    NumberStyles.None,
+                    CultureInfo.InvariantCulture,
+                    out var sequence) ||
+                sequence <= 0)
+            {
+                throw new ThreatUpdateException(
+                    "The threat-content versions directory contains a noncanonical version.");
+            }
+
+            var version = directory.Name[(sequenceLength + 1)..];
+            string canonicalName;
+            try
+            {
+                canonicalName = ThreatContentReference.FormatDirectoryName(sequence, version);
+                _ = new ThreatContentReference(canonicalName, sequence, version);
+            }
+            catch (ArgumentException exception)
+            {
+                throw new ThreatUpdateException(
+                    "The threat-content versions directory contains a noncanonical version.",
+                    exception);
+            }
+
+            if (!string.Equals(directory.Name, canonicalName, StringComparison.Ordinal))
+            {
+                throw new ThreatUpdateException(
+                    "The threat-content versions directory contains a noncanonical version.");
+            }
+
+            versions.Add(new StoredVersion(
+                directory.Name,
+                version,
+                sequence,
+                directory.FullName));
+        }
+
+        return versions;
     }
 
     private FileStream AcquireOperationLock()
@@ -410,4 +541,10 @@ public sealed class ThreatContentStore
         {
         }
     }
+
+    private sealed record StoredVersion(
+        string DirectoryName,
+        string Version,
+        long Sequence,
+        string Path);
 }

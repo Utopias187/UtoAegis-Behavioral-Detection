@@ -11,6 +11,8 @@ namespace UtoAegis.Infrastructure.Tests;
 [TestClass]
 public sealed class ThreatContentStoreTests
 {
+    private static readonly string[] TwoDeletedVersions = ["2026.10.7", "2026.10.8"];
+    private static readonly string[] OneDeletedVersion = ["2026.10.7"];
     private static readonly DateTimeOffset Now =
         new(2026, 10, 17, 18, 0, 0, TimeSpan.Zero);
 
@@ -151,6 +153,69 @@ public sealed class ThreatContentStoreTests
         Assert.AreEqual(7L, active.Manifest.Sequence);
         Assert.HasCount(0, before);
         Assert.HasCount(0, after);
+    }
+
+    [TestMethod]
+    public async Task PruneAsync_ExcessVersions_PreservesActiveAndRollbackVersions()
+    {
+        var store = CreateStore();
+        await store.ApplyAsync(await CreateBundleAsync(7, 'a'));
+        await store.ApplyAsync(await CreateBundleAsync(8, 'b'));
+        await store.ApplyAsync(await CreateBundleAsync(9, 'c'));
+        await store.ApplyAsync(await CreateBundleAsync(10, 'd'));
+
+        var result = await store.PruneAsync(maximumRetainedVersions: 2);
+        var restored = await store.RollbackAsync();
+        var versionDirectories = Directory.GetDirectories(
+            Path.Combine(_testDirectory, "content-store", "versions"));
+
+        Assert.AreEqual(2, result.DeletedVersionCount);
+        Assert.AreEqual(2, result.RetainedVersionCount);
+        CollectionAssert.AreEquivalent(
+            TwoDeletedVersions,
+            result.DeletedVersions.ToArray());
+        Assert.AreEqual(9L, restored.Manifest.Sequence);
+        Assert.HasCount(2, versionDirectories);
+    }
+
+    [TestMethod]
+    public async Task PruneAsync_RetentionAllowsExtraVersion_KeepsNewestUnreferencedVersion()
+    {
+        var store = CreateStore();
+        await store.ApplyAsync(await CreateBundleAsync(7, 'a'));
+        await store.ApplyAsync(await CreateBundleAsync(8, 'b'));
+        await store.ApplyAsync(await CreateBundleAsync(9, 'c'));
+        await store.ApplyAsync(await CreateBundleAsync(10, 'd'));
+
+        var result = await store.PruneAsync(maximumRetainedVersions: 3);
+
+        Assert.AreEqual(1, result.DeletedVersionCount);
+        CollectionAssert.AreEqual(OneDeletedVersion, result.DeletedVersions.ToArray());
+        Assert.IsTrue(Directory.Exists(Path.Combine(
+            _testDirectory,
+            "content-store",
+            "versions",
+            ThreatContentReference.FormatDirectoryName(8, "2026.10.8"))));
+    }
+
+    [TestMethod]
+    public async Task PruneAsync_NoncanonicalDirectory_RefusesDeletion()
+    {
+        var store = CreateStore();
+        await store.ApplyAsync(await CreateBundleAsync(7, 'a'));
+        await store.ApplyAsync(await CreateBundleAsync(8, 'b'));
+        var unexpectedPath = Path.Combine(
+            _testDirectory,
+            "content-store",
+            "versions",
+            "operator-notes");
+        Directory.CreateDirectory(unexpectedPath);
+
+        var exception = await Assert.ThrowsExactlyAsync<ThreatUpdateException>(async () =>
+            await store.PruneAsync(maximumRetainedVersions: 2));
+
+        StringAssert.Contains(exception.Message, "noncanonical");
+        Assert.IsTrue(Directory.Exists(unexpectedPath));
     }
 
     private ThreatContentStore CreateStore()
