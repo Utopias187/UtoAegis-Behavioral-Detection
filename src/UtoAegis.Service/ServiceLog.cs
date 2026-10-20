@@ -62,6 +62,33 @@ internal static partial class ServiceLog
         DateTimeOffset expiresUtc);
 
     [LoggerMessage(
+        EventId = 105,
+        Level = LogLevel.Information,
+        Message = "Reloaded authenticated threat content from {PreviousVersion} sequence {PreviousSequence} to {Version} sequence {Sequence} as scanner generation {Generation} using key {KeyId}; expires {ExpiresUtc}.")]
+    public static partial void ThreatContentReloaded(
+        ILogger logger,
+        string previousVersion,
+        long previousSequence,
+        string version,
+        long sequence,
+        long generation,
+        string keyId,
+        DateTimeOffset expiresUtc);
+
+    [LoggerMessage(
+        EventId = 106,
+        Level = LogLevel.Information,
+        Message = "Threat-content health: version={Version}, sequence={Sequence}, scannerGeneration={ScannerGeneration}, reloads={SuccessfulReloads}, rejected={RejectedReloads}, lastChecked={LastCheckedUtc}.")]
+    public static partial void ThreatContentHealth(
+        ILogger logger,
+        string version,
+        long sequence,
+        long scannerGeneration,
+        long successfulReloads,
+        long rejectedReloads,
+        DateTimeOffset? lastCheckedUtc);
+
+    [LoggerMessage(
         EventId = 200,
         Level = LogLevel.Debug,
         Message = "Scanned {Path}; completed={Completed}, detected={Detected}.")]
@@ -111,6 +138,16 @@ internal static partial class ServiceLog
         ILogger logger,
         string version,
         DateTimeOffset expiresUtc);
+
+    [LoggerMessage(
+        EventId = 303,
+        Level = LogLevel.Warning,
+        Message = "Rejected a threat-content reload and retained {ActiveVersion} sequence {ActiveSequence}: {Reason}")]
+    public static partial void ThreatContentReloadRejected(
+        ILogger logger,
+        string activeVersion,
+        long activeSequence,
+        string reason);
 
     [LoggerMessage(
         EventId = 400,

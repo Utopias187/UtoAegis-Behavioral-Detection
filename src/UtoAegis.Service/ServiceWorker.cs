@@ -11,6 +11,7 @@ using UtoAegis.Infrastructure.Monitoring;
 using UtoAegis.Infrastructure.Quarantine;
 using UtoAegis.Infrastructure.Reputation;
 using UtoAegis.Infrastructure.Signatures;
+using UtoAegis.Infrastructure.ThreatIntelligence;
 
 namespace UtoAegis.Service;
 
@@ -26,9 +27,21 @@ internal sealed class ServiceWorker(
         FileSystemQuarantineStore? quarantineStore = null;
         try
         {
-            var scanner = await CreateScannerAsync(stoppingToken);
+            var initialScanner = await CreateScannerAsync(
+                detectionSources.DatabasePath,
+                detectionSources.SignaturePath,
+                initializeReputationStore: !detectionSources.IsManagedContent,
+                stoppingToken);
+            ServiceThreatContentReloader? contentReloader = null;
+            IFileScanner scanner = initialScanner;
             if (detectionSources.IsManagedContent)
             {
+                contentReloader = new ServiceThreatContentReloader(
+                    detectionSources.ManagedSource!,
+                    detectionSources.ManagedSnapshot!,
+                    initialScanner,
+                    CreateManagedScannerAsync);
+                scanner = contentReloader.Scanner;
                 ServiceLog.ThreatContentLoaded(
                     logger,
                     detectionSources.ContentVersion!,
@@ -89,9 +102,17 @@ internal sealed class ServiceWorker(
             var monitorTask = monitoringEngine
                 .RunAsync(configuration.MonitorRoot, eventSource, stoppingToken)
                 .AsTask();
+            var nextHealthUtc = DateTimeOffset.UtcNow + configuration.HealthInterval;
+            var nextReloadUtc = DateTimeOffset.UtcNow + configuration.ContentReloadInterval;
             while (!monitorTask.IsCompleted)
             {
-                var delay = Task.Delay(configuration.HealthInterval, stoppingToken);
+                var nextActionUtc = contentReloader is null || nextHealthUtc <= nextReloadUtc
+                    ? nextHealthUtc
+                    : nextReloadUtc;
+                var delayDuration = nextActionUtc - DateTimeOffset.UtcNow;
+                var delay = Task.Delay(
+                    delayDuration <= TimeSpan.Zero ? TimeSpan.Zero : delayDuration,
+                    stoppingToken);
                 if (await Task.WhenAny(monitorTask, delay) == monitorTask)
                 {
                     break;
@@ -102,11 +123,32 @@ internal sealed class ServiceWorker(
                     break;
                 }
 
-                WriteHealth(sink.Snapshot());
+                var now = DateTimeOffset.UtcNow;
+                if (contentReloader is not null && now >= nextReloadUtc)
+                {
+                    var reload = await contentReloader.CheckAsync(stoppingToken);
+                    WriteReloadResult(reload, contentReloader.Scanner.Generation);
+                    nextReloadUtc = DateTimeOffset.UtcNow + configuration.ContentReloadInterval;
+                }
+
+                if (now >= nextHealthUtc)
+                {
+                    WriteHealth(sink.Snapshot());
+                    if (contentReloader is not null)
+                    {
+                        WriteThreatContentHealth(contentReloader.Health);
+                    }
+
+                    nextHealthUtc = DateTimeOffset.UtcNow + configuration.HealthInterval;
+                }
             }
 
             var summary = await monitorTask;
             WriteHealth(sink.Snapshot());
+            if (contentReloader is not null)
+            {
+                WriteThreatContentHealth(contentReloader.Health);
+            }
             ServiceLog.MonitoringStopped(
                 logger,
                 summary.Elapsed.TotalMilliseconds,
@@ -125,14 +167,26 @@ internal sealed class ServiceWorker(
         }
     }
 
+    private ValueTask<IFileScanner> CreateManagedScannerAsync(
+        ThreatContentSnapshot snapshot,
+        CancellationToken cancellationToken) =>
+        CreateScannerAsync(
+            snapshot.ReputationDatabasePath,
+            snapshot.SignatureRulesPath,
+            initializeReputationStore: false,
+            cancellationToken);
+
     private async ValueTask<IFileScanner> CreateScannerAsync(
+        string? databasePath,
+        string? signaturePath,
+        bool initializeReputationStore,
         CancellationToken cancellationToken)
     {
         IHashReputationStore? reputationStore = null;
-        if (detectionSources.DatabasePath is not null)
+        if (databasePath is not null)
         {
-            var store = new SqliteHashReputationStore(detectionSources.DatabasePath);
-            if (!detectionSources.IsManagedContent)
+            var store = new SqliteHashReputationStore(databasePath);
+            if (initializeReputationStore)
             {
                 await store.InitializeAsync(cancellationToken);
             }
@@ -141,10 +195,10 @@ internal sealed class ServiceWorker(
         }
 
         ISignatureScanner? signatureScanner = null;
-        if (detectionSources.SignaturePath is not null)
+        if (signaturePath is not null)
         {
             var ruleFile = await JsonLinesSignatureRuleReader.ReadAsync(
-                detectionSources.SignaturePath,
+                signaturePath,
                 cancellationToken);
             signatureScanner = new FixedByteSignatureScanner(ruleFile.Rules);
             ServiceLog.SignatureRulesLoaded(
@@ -181,4 +235,46 @@ internal sealed class ServiceWorker(
             snapshot.ResponseFailureCount,
             snapshot.MonitorIssueCount,
             snapshot.HistoryFailureCount);
+
+    private void WriteReloadResult(ThreatContentReloadResult result, long generation)
+    {
+        if (result.Status == ThreatContentReloadStatus.Reloaded)
+        {
+            var manifest = result.Snapshot!.Manifest;
+            ServiceLog.ThreatContentReloaded(
+                logger,
+                result.Previous!.Version,
+                result.Previous.Sequence,
+                manifest.Version,
+                manifest.Sequence,
+                generation,
+                manifest.KeyId,
+                manifest.ExpiresUtc);
+            if (manifest.ExpiresUtc <= DateTimeOffset.UtcNow)
+            {
+                ServiceLog.ThreatContentExpired(
+                    logger,
+                    manifest.Version,
+                    manifest.ExpiresUtc);
+            }
+        }
+        else if (result.Status == ThreatContentReloadStatus.Rejected && result.ShouldLog)
+        {
+            ServiceLog.ThreatContentReloadRejected(
+                logger,
+                result.Active.Version,
+                result.Active.Sequence,
+                result.Error!);
+        }
+    }
+
+    private void WriteThreatContentHealth(ServiceThreatContentHealthSnapshot snapshot) =>
+        ServiceLog.ThreatContentHealth(
+            logger,
+            snapshot.Version,
+            snapshot.Sequence,
+            snapshot.ScannerGeneration,
+            snapshot.SuccessfulReloadCount,
+            snapshot.RejectedReloadCount,
+            snapshot.LastCheckedUtc);
 }
