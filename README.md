@@ -10,12 +10,15 @@ rollback-protected updates for both reputation and signature content. UtoAegis
 also includes a separately privileged Windows updater that retrieves those
 bundles over a bounded HTTPS channel, retries transient failures, records rollout
 telemetry, and limits retained versions. UtoAegis does not execute scanned files,
-and the monitoring service defaults to observe-only behavior.
+and the monitoring service defaults to observe-only behavior. The monitor now
+reverifies and atomically adopts newly active content without a service restart.
 
 Implementation decisions and verification notes are recorded in the
 [development journal](docs/development-journal.md).
 Deployment and trust operations for unattended updates are in the
 [production updater guide](docs/production-threat-updater.md).
+Live detector replacement is documented in the
+[live reload guide](docs/live-threat-content-reloading.md).
 
 ## Current architecture
 
@@ -52,7 +55,8 @@ offline signer -> signed bundle -> verify + stage -> atomic active pointer
                                                |-> last-known-good rollback
 ring-specific HTTPS channel -> privileged updater -> verified content store
                                       |-> retry/backoff + retention + telemetry
-read-only monitor restart -> reverify active pointer -> refreshed detectors
+read-only monitor -> poll pointer -> reverify -> atomic detector generation swap
+                                  | failure -> retain last-known-good generation
 ```
 
 `Unknown` means only that the digest is absent from the configured database. It
@@ -452,6 +456,9 @@ a clean-file verdict.
   monitored tree, and quarantine mode receives delete-child rather than general
   write access to that tree. An administrator or compromised service process
   remains inside the host trust boundary.
+- Managed content changes are reverified before an immutable scanner generation
+  is atomically published. A rejected candidate leaves the last-known-good
+  generation active, and read leases keep files available to in-flight scans.
 - Quarantine requires a completed detection and rechecks the expected SHA-256
   and length through the exact Windows file handle used for removal. This closes
   the path replacement window between validation and deletion on Windows.
@@ -582,6 +589,18 @@ a clean-file verdict.
 - [x] Added one-shot, validate-only, publish, install, status, and removal workflows.
 - [x] Kept the endpoint monitoring service read-only to managed content.
 
-The next milestone should add safe read-only live content reload in the monitor,
-with atomic detector replacement, health attestation, and automatic fallback to
-the currently loaded snapshot if reload validation fails.
+### Milestone 11 — Live threat-intelligence reloading
+
+- [x] Added bounded polling for managed-content pointer changes.
+- [x] Reverified signatures, payload hashes, strict feeds, and the derived database.
+- [x] Built complete candidate scanners before making them visible to scans.
+- [x] Atomically swapped immutable scanner generations without mixed-stage scans.
+- [x] Retained the last-known-good generation when candidate validation failed.
+- [x] Kept in-flight generations leased until their final scan completed.
+- [x] Taught retention pruning to preserve and report leased generations.
+- [x] Added reload, rejection, expiry, and content-health Event Log telemetry.
+- [x] Preserved the monitor's read-only content-store permissions.
+
+The next milestone should add tamper-evident security telemetry with durable
+delivery checkpoints, bounded local spooling, and an authenticated collector
+boundary for fleet health and detection events.

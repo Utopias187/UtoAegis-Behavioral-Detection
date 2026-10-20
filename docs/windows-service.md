@@ -74,6 +74,7 @@ allowlist entries, are resolved from the service installation directory.
     "WatcherBufferSize": 16384,
     "DebounceMilliseconds": 500,
     "HealthIntervalSeconds": 60,
+    "ContentReloadIntervalSeconds": 30,
     "Response": {
       "Mode": "ObserveOnly",
       "AllowlistedPathPrefixes": [
@@ -91,8 +92,9 @@ allowlist entries, are resolved from the service installation directory.
 detection source. It cannot be combined with `DatabasePath` or `SignaturePath`.
 The direct paths remain available for manual or development deployments; at
 least one direct path is required when no managed store is configured. All
-detection content is loaded at startup, so activation or rollback requires a
-controlled service restart.
+detection content is verified at startup and then checked for authenticated
+generation changes. Activation or rollback is adopted without a restart after
+candidate reverification succeeds. Direct-path deployments remain startup-only.
 
 The optional `UtoAegisUpdater` companion runs under its own virtual service
 account. It receives modify access to the content store plus its isolated
@@ -114,6 +116,7 @@ The principal bounds are:
 | `WatcherBufferSize` | 4,096–65,536 bytes |
 | `DebounceMilliseconds` | 0–60,000 |
 | `HealthIntervalSeconds` | 10–86,400 |
+| `ContentReloadIntervalSeconds` | 5–3,600 |
 | `Response:MaxActionsPerWindow` | 1–100 |
 | `Response:RateLimitWindowSeconds` | 1–86,400 |
 
@@ -177,11 +180,12 @@ Application log events with:
 pwsh ./scripts/windows/Get-UtoAegisServiceStatus.ps1
 ```
 
-Event IDs are grouped by purpose: `100`–`104` cover lifecycle, health, and
-authenticated content loading; `200`–`201` cover file and recovery scans;
-`300`–`301` cover detections and monitor issues; `302` warns about expired
-last-known-good content; and `400` reports history persistence failure. Event data can
-include file paths and must follow the host's access and retention policy.
+Event IDs are grouped by purpose: `100`–`106` cover lifecycle, health,
+authenticated content loading, reload, and content health; `200`–`201` cover
+file and recovery scans; `300`–`301` cover detections and monitor issues; `302`
+warns about expired last-known-good content; `303` reports a rejected reload;
+and `400` reports history persistence failure. Event data can include file paths
+and must follow the host's access and retention policy.
 
 To recover a quarantined file, stop the service, inspect the vault with
 `quarantine list` and `quarantine show`, then use the CLI `quarantine restore`
@@ -202,9 +206,8 @@ preserved deliberately so removal does not destroy recovery evidence.
 
 - The filesystem watcher is a best-effort change signal, not a kernel minifilter
   or a transactional audit source. Overflow triggers a recovery scan.
-- Signed bundles require operator-supplied transport and activation; there is no
-  built-in network fetcher or scheduler.
-- Configuration and content are loaded only at startup; there is no live reload.
+- Managed content reload uses bounded polling rather than a push notification.
+- Trust keys, direct content paths, and response policy are loaded at startup.
 - Rate-limit state is in memory and resets when the service restarts.
 - Event Log messages are operational notifications, not a remote alerting or
   incident-management integration.

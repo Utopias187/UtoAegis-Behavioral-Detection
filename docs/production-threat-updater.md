@@ -143,7 +143,7 @@ Each cycle appends bounded JSON Lines records to `TelemetryPath`. Records includ
 UTC time, one run ID, deployment ID, rollout ring, attempt number, sequence,
 candidate version, event, and a non-secret message. Events distinguish checks,
 scheduled retries, current content, activation, rejection, transport failure,
-and retention failure.
+retention failure, and retention deferred by an in-flight scanner lease.
 
 Telemetry is local and is not uploaded by UtoAegis. Forward the file with the
 organization's existing log collector. Use a different fixed channel URI per
@@ -156,9 +156,12 @@ user names, or host secrets in deployment or ring identifiers.
 After successful activation the updater prunes old immutable version
 directories to `MaximumRetainedVersions`. The currently active and immediate
 rollback versions are always protected. Additional slots retain the newest
-unreferenced versions by sequence. A reparse point, file, noncanonical directory,
-missing state target, or deletion failure stops pruning and emits a retention
-failure without undoing the already committed activation.
+unreferenced versions by sequence. A generation still used by an in-flight
+monitor scan is pinned and reported rather than deleted, even when retention
+temporarily exceeds the target. A later cycle can prune it after the scan
+drains. A reparse point, file, noncanonical directory, missing state target, or
+unrelated deletion failure stops pruning and emits a retention failure without
+undoing the already committed activation.
 
 The anti-rollback sequence floor is never pruned. A manual rollback still
 requires the Milestone 9 CLI and trusted key set. The updater will then accept
@@ -171,7 +174,7 @@ For planned rotation:
 1. Provision the new public key through the trusted host-configuration channel.
 2. Configure old and new keys as `Trusted` in the updater and monitor.
 3. Publish a higher sequence signed by the new key to the pilot channel.
-4. Confirm pilot activation telemetry, restart pilot monitors, and promote the
+4. Confirm pilot activation and monitor reload telemetry, then promote the
    identical signed bundle through the remaining rollout rings.
 5. Mark the old updater key `Revoked`, remove it from the monitor's trusted-key
    list, and restart monitors during a controlled window.
@@ -190,8 +193,8 @@ of the same incident procedure.
 
 ## Current limitations
 
-- The monitor loads content at startup. Activation requires a controlled monitor
-  restart; safe live reload is planned for the next milestone.
+- Monitor trust-key changes still require a controlled restart even though
+  content generations now reload without one.
 - Rollout telemetry is local JSON Lines, not a remote delivery service or SLA.
 - Key status is protected by host configuration controls, not a remotely signed
   root-metadata format.

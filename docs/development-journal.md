@@ -1095,3 +1095,110 @@ Add safe live threat-content reload to the monitoring service. A new active
 snapshot should be reverified read-only, swapped atomically between scan events,
 reported through health telemetry, and abandoned without disrupting the current
 detectors when reload validation fails.
+
+## 2026-10-20 — Milestone 11: live threat-intelligence reloading
+
+### Goal
+
+Make authenticated updater activation visible to the running monitor without
+giving that process content-store write access or restarting file monitoring.
+Keep every scan internally consistent, preserve last-known-good detection after
+a rejected candidate, and prevent retention cleanup from removing files still
+used by an older in-flight scanner generation.
+
+### Design and data flow
+
+- `ReloadableFileScanner` captures one immutable scanner generation per scan and
+  publishes replacements with an atomic reference exchange.
+- A retired generation drains its active scans before releasing disposable
+  resources. New scans immediately use the replacement generation.
+- Managed service startup acquires a read lease and performs the existing full
+  signature, payload, feed, and derived-database verification.
+- The service polls the small state pointer at a bounded interval. Unchanged
+  version/sequence identities avoid repeated payload work.
+- A changed pointer receives a fresh read lease, full read-only verification,
+  and complete scanner construction before the atomic swap.
+- Expected validation failures retain the loaded generation. The first repeated
+  failure emits Event 303; health telemetry keeps counting later attempts.
+- Event 105 records successful replacement and Event 106 reports version,
+  sequence, scanner generation, successful reloads, rejected reloads, and last
+  check time.
+- Store pruning probes an unreferenced reputation database for exclusive access.
+  A generation leased by the monitor is reported and retained until a later run.
+
+```text
+privileged updater -> authenticate -> activate state pointer -> retention probe
+                                       |                      | busy -> defer
+read-only monitor -> poll changed state -> lease -> reverify -> build scanner
+                                                     | failure -> keep current
+                                                     v
+                                          atomic generation replacement
+old in-flight scans -> old generation -> complete -> lease released
+```
+
+### Security boundaries
+
+- The monitor receives no content-store write permission. Its lease is a
+  read-only database handle using Windows file-sharing semantics.
+- State identity is only a cheap change signal. No candidate becomes usable
+  until its signature, payloads, strict feeds, and database attestation pass.
+- A scan cannot mix detection stages across generations because it acquires its
+  generation before hashing and releases it after the complete composite scan.
+- Rollback to a lower active sequence is allowed after store reverification,
+  while the independent highest-accepted sequence floor remains unchanged.
+- Candidate failure does not silently replace the active pointer or invoke
+  privileged rollback from the monitor.
+- Trust keys remain a startup configuration boundary; content cannot authorize
+  a new signing key.
+
+### Verification
+
+- Atomic-scanner tests cover replacement routing, in-flight consistency, and
+  deferred disposal until the final scan drains.
+- Service tests cover unchanged pointers, successful replacement, failed
+  candidate fallback, duplicate-warning suppression, and reload interval bounds.
+- Store tests hold a real Windows read lease across multiple activations and
+  prove that pruning removes an unleased version while retaining and reporting
+  the leased generation.
+- Updater tests prove that deferred retention emits rollout telemetry without
+  undoing a successful activation.
+- Locked restore and warning-level formatter verification completed cleanly.
+- The Release build completed with zero warnings and zero errors.
+- All 247 tests passed: 101 core, 76 infrastructure, 39 CLI, 20 monitoring
+  service, and 11 updater tests.
+- All nine PowerShell scripts parsed successfully, and all ten projects reported
+  no known vulnerable direct or transitive NuGet packages.
+- A validate-only service smoke test accepted the minimum five-second reload
+  interval with isolated monitor and state paths; it did not register a service
+  or mutate monitored files.
+
+### Known limitations
+
+- Reload discovery polls from 5 through 3,600 seconds; there is no cross-service
+  event or push notification.
+- Trust keys, direct content paths, and response policy still require a
+  controlled service restart.
+- A bad active pointer is retried while the process keeps its verified in-memory
+  generation. The monitor does not mutate state or automatically roll back.
+- Health counters reset with the process and Event Log records have no built-in
+  durable remote delivery.
+- File-sharing leases provide the intended guarantee on the Windows deployment
+  target; local-administrator compromise remains inside the host trust boundary.
+
+### Definition of done
+
+- [x] Managed state changes are detected with a configurable bounded interval.
+- [x] Candidates are fully reverified and built before publication.
+- [x] Scanner replacement is atomic and scans never mix generations.
+- [x] Invalid candidates preserve last-known-good detection.
+- [x] In-flight generations remain pinned until their scans drain.
+- [x] Retention reports and defers deletion of pinned versions.
+- [x] Reload success, rejection, expiry, and health are operationally visible.
+- [x] The monitor remains a read-only content-store consumer.
+
+### Next milestone
+
+Add tamper-evident security telemetry with bounded local spooling, durable
+delivery checkpoints, and an authenticated collector boundary. Fleet operators
+should be able to correlate detections, response decisions, updater rollout,
+and live-reload health without granting the monitor broad network privileges.

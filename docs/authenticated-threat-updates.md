@@ -165,10 +165,10 @@ last-known-good recovery. It preserves `highestAcceptedSequence`; after rolling
 from sequence 43 back to 42, neither 42 nor 43 can be applied as a new update.
 The next update must use sequence 44 or higher.
 
-The service loads content only at startup. Apply or roll back the bundle, verify
-`updates status`, then restart the service during a controlled change window.
-If restart validation fails, the service does not begin monitoring with
-unverified content.
+The service verifies content at startup and polls the active state pointer while
+running. Apply or roll back the bundle and verify `updates status`; the monitor
+then reverifies and atomically adopts the generation. A failed reload preserves
+the scanner generation that was already active.
 
 ## Service configuration
 
@@ -197,13 +197,15 @@ access only.
 Service startup rechecks the state reference, manifest signature, signed
 payload hashes, strict feed syntax, and a database lookup. Event 104 records the
 version, sequence, key, and expiration. Event 302 warns when last-known-good
-content is expired.
+content is expired. Events 105, 106, and 303 expose reload success, content
+health, and rejection while the monitor retains read-only store access.
 
 ## Key rotation and revocation
 
-For planned rotation, configure old and new public keys, publish a higher
-sequence signed by the new key, activate it, restart and observe the service,
-then remove the old key after the rollback window closes. A rollback version
+For planned rotation, configure old and new public keys, restart to load the
+expanded trust set, publish a higher sequence signed by the new key, activate
+and observe the live reload, then remove the old key after the rollback window
+closes. A rollback version
 signed only by a removed key will be refused until that key is deliberately
 restored to the trust configuration.
 
@@ -222,9 +224,11 @@ be updated during the same controlled rotation or revocation rollout.
 
 - Bundle transport and scheduling are external operator responsibilities when
   using only the Milestone 9 CLI. Milestone 10 supplies an optional updater.
-- Activation is atomic, but the running service does not live-reload content.
-- Only the immediately previous version is addressable through rollback;
-  older version directories are retained without an automatic prune policy.
+- Live reload uses bounded polling and retains the current scanner after a
+  candidate failure; it does not rewrite a bad active pointer automatically.
+- Only the immediately previous version is addressable through rollback. The
+  optional updater bounds older retained directories while respecting live
+  scanner leases.
 - The anti-rollback floor is local state. Local-administrator or disk compromise
   remains within the trust boundary.
 - ECDSA P-256/SHA-256 is the only accepted signature algorithm in schema 1.
