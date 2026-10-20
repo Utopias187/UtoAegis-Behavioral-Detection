@@ -7,10 +7,15 @@ opt-in structured scan history, real-time directory monitoring, and reversible
 quarantine. A supervised Windows service adds health and detection events plus
 an explicit response policy. Authenticated threat bundles add signed, staged,
 rollback-protected updates for both reputation and signature content. UtoAegis
-does not execute scanned files, and the service defaults to observe-only behavior.
+also includes a separately privileged Windows updater that retrieves those
+bundles over a bounded HTTPS channel, retries transient failures, records rollout
+telemetry, and limits retained versions. UtoAegis does not execute scanned files,
+and the monitoring service defaults to observe-only behavior.
 
 Implementation decisions and verification notes are recorded in the
 [development journal](docs/development-journal.md).
+Deployment and trust operations for unattended updates are in the
+[production updater guide](docs/production-threat-updater.md).
 
 ## Current architecture
 
@@ -26,6 +31,9 @@ Implementation decisions and verification notes are recorded in the
 - `UtoAegis.Service` hosts the monitor under Windows Service Control Manager,
   validates deployment boundaries, emits Event Log health and detection events,
   and applies the configured response policy.
+- `UtoAegis.Updater` is a separate Windows worker with write access to managed
+  content. It performs HTTPS retrieval, authenticated activation, retention,
+  retry/backoff, key-policy enforcement, and local rollout telemetry.
 
 ```text
 directory -> bounded traversal -> regular file paths -|
@@ -42,6 +50,9 @@ Windows SCM -> supervised service -> health and detection events
 restricted vault -> integrity check -> no-overwrite restore
 offline signer -> signed bundle -> verify + stage -> atomic active pointer
                                                |-> last-known-good rollback
+ring-specific HTTPS channel -> privileged updater -> verified content store
+                                      |-> retry/backoff + retention + telemetry
+read-only monitor restart -> reverify active pointer -> refreshed detectors
 ```
 
 `Unknown` means only that the digest is absent from the configured database. It
@@ -558,7 +569,19 @@ a clean-file verdict.
 - [x] Added operator CLI commands, offline bundle tooling, and service startup consumption.
 - [x] Kept the service read-only to the content store and private keys off endpoints.
 
-The next milestone should add a separately privileged production updater with
-authenticated transport, retry and backoff, key rotation and revocation,
-retention limits, and rollout telemetry. The monitoring service should remain a
-read-only content consumer.
+### Milestone 10 — Production threat-intelligence updater
+
+- [x] Added a separately privileged .NET 10 Windows updater worker.
+- [x] Required fixed HTTPS channel URLs and exact final response URIs.
+- [x] Disabled redirects, cookies, and content decompression in the production client.
+- [x] Authenticated bounded metadata before downloading either signed payload.
+- [x] Added transient-only retry with capped exponential backoff.
+- [x] Added deployment and rollout-ring telemetry in bounded JSON Lines records.
+- [x] Added explicit Trusted and Revoked signing-key policy for rotation.
+- [x] Preserved active and rollback content while bounding retained versions.
+- [x] Added one-shot, validate-only, publish, install, status, and removal workflows.
+- [x] Kept the endpoint monitoring service read-only to managed content.
+
+The next milestone should add safe read-only live content reload in the monitor,
+with atomic detector replacement, health attestation, and automatic fallback to
+the currently loaded snapshot if reload validation fails.

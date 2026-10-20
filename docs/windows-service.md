@@ -94,6 +94,13 @@ least one direct path is required when no managed store is configured. All
 detection content is loaded at startup, so activation or rollback requires a
 controlled service restart.
 
+The optional `UtoAegisUpdater` companion runs under its own virtual service
+account. It receives modify access to the content store plus its isolated
+download and telemetry directories, while `NT SERVICE\UtoAegis` retains only
+read access to managed content. The two services do not share an executable or
+private credentials. Installation and rotation procedures are documented in the
+[production updater guide](production-threat-updater.md).
+
 Build and activate the initial signed content before validating or installing
 the service. The complete workflow and bundle schema are in the
 [authenticated update guide](authenticated-threat-updates.md).

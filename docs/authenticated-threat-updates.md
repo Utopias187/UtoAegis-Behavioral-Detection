@@ -5,6 +5,10 @@ updating its hash indicators and exact-byte signatures. It intentionally does
 not fetch content from the network. An operator transfers a signed directory to
 the endpoint and activates it with the CLI.
 
+Milestone 10 adds an optional separately privileged production updater around
+this activation core. See the [production updater guide](production-threat-updater.md)
+for HTTPS retrieval, scheduling, retention, rollout, and key-status policy.
+
 ## Trust model
 
 - A publisher signs the exact bytes of `manifest.json` with an ECDSA NIST P-256
@@ -208,9 +212,16 @@ key through a separately trusted configuration channel, and publish a higher
 sequence. Milestone 9 does not provide a signed key-revocation list or recover a
 compromised private key automatically.
 
+The production updater makes key status explicit in endpoint configuration.
+Only entries marked `Trusted` are loaded into its verifier; entries marked
+`Revoked` remain visible for audit but cannot authenticate channel metadata.
+The monitor has a separate read-only trust configuration, so its key list must
+be updated during the same controlled rotation or revocation rollout.
+
 ## Current limitations
 
-- Bundle transport and scheduling are external operator responsibilities.
+- Bundle transport and scheduling are external operator responsibilities when
+  using only the Milestone 9 CLI. Milestone 10 supplies an optional updater.
 - Activation is atomic, but the running service does not live-reload content.
 - Only the immediately previous version is addressable through rollback;
   older version directories are retained without an automatic prune policy.

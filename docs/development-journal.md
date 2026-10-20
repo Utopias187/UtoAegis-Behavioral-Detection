@@ -988,3 +988,110 @@ Add a separately privileged production updater around this authenticated
 activation core. It should provide HTTPS retrieval, retry and backoff, staged
 rollout telemetry, disk-retention bounds, and explicit signing-key rotation and
 revocation while keeping the monitoring service read-only.
+
+## 2026-10-20 — Milestone 10: production threat-intelligence updater
+
+### Goal
+
+Automate authenticated content retrieval without granting network or write
+privileges to the endpoint monitor. Bound server-controlled input before large
+downloads, preserve the Milestone 9 activation guarantees, make retries and disk
+use predictable, and expose enough local telemetry for staged fleet rollout.
+
+### Design and data flow
+
+- `UtoAegis.Updater` is a separate .NET 10 worker and Windows service identity.
+- Its channel is a fixed HTTPS directory URI. The production handler disables
+  redirects, cookies, and decompression and enables certificate revocation checks.
+- The downloader also compares every final response URI with the exact requested
+  URI, requires HTTP 200 plus bounded `Content-Length`, and writes fixed filenames.
+- Manifest and signature are downloaded first. The ECDSA signature, time window,
+  and sequence are accepted before either payload request is sent.
+- Full payload verification and strict parsing still occur through the Milestone
+  9 staging and activation implementation, avoiding a second trust path.
+- Only transient transport failures retry within a cycle. Backoff doubles from
+  the configured initial delay to a configured cap and attempts remain bounded.
+- Each cycle emits bounded JSON Lines records with run, deployment, ring,
+  attempt, sequence, version, and result fields for external fleet collection.
+- Post-activation retention always protects active and rollback references,
+  keeps the newest optional versions, and rejects ambiguous filesystem entries.
+
+```text
+ring HTTPS directory -> manifest + signature -> authenticate and check sequence
+                                             | rejected -> telemetry, no payloads
+                                             v
+                                fixed payload downloads -> Milestone 9 verifier
+                                                        -> atomic activation
+                                                        -> bounded retention
+                                                        -> rollout telemetry
+read-only monitor -> controlled restart -> reverify active content
+```
+
+### Security boundaries
+
+- Configuration rejects HTTP, URI credentials, queries, fragments, and channel
+  paths without a trailing slash.
+- Writable content, download, and telemetry directories are external, distinct,
+  non-nested, non-root, and non-reparse-point paths.
+- Signing keys remain outside updater-writable paths. Only public P-256 material
+  is loaded; private-key rejection remains in the shared trust-store loader.
+- Key entries have explicit `Trusted` or `Revoked` status. Revoked entries are
+  excluded from runtime verification while remaining visible to operators.
+- The updater virtual account receives content-store write access. The monitor
+  account retains read-only content and public-key access.
+- TLS protects transport but does not replace detached content signatures. A
+  locally compromised administrator, root trust, or signing key remains inside
+  the documented trust boundary.
+
+### Verification
+
+- Locked restore and formatter verification completed successfully.
+- The Release build completed on .NET 10 with zero warnings and zero errors.
+- All 238 automated tests passed: 98 core, 75 infrastructure, 39 CLI, 16
+  monitoring-service, and 10 updater tests.
+- HTTPS downloader tests cover valid bundles, metadata-first authentication,
+  bad signatures, transient server failures, signed-length mismatch, unsafe
+  channel URIs, staging cleanup, and final-response URI crossing.
+- Store tests cover active/rollback retention, optional recent retention,
+  noncanonical entry refusal, and continued rollback after pruning.
+- Updater tests cover configuration bounds, path isolation, explicit revocation,
+  capped backoff, activation, current-version short circuit, retry exhaustion,
+  and deployment/ring telemetry.
+- The updater project builds under the same warning-as-error, deterministic,
+  locked-dependency, and vulnerability-audit policy as the rest of UtoAegis.
+- All nine Windows PowerShell scripts parse with the PowerShell abstract syntax
+  tree parser. Service registration and ACL mutations were not run on the
+  development host.
+- A harmless validate-only smoke test loaded an ephemeral P-256 public key and
+  isolated temporary content, download, and telemetry paths through environment
+  configuration, then exited successfully without fetching or activating data.
+- NuGet reported no known vulnerable direct or transitive packages in any of the
+  ten projects.
+
+### Known limitations
+
+- The monitor still loads one snapshot at startup; updater activation becomes
+  visible after a controlled monitor restart.
+- Telemetry is a local collection source and has no built-in remote delivery.
+- Key status is host-managed configuration rather than signed root metadata.
+- The transport does not include built-in mTLS, bearer tokens, proxy secrets, or
+  certificate pinning.
+- Exponential backoff is bounded but does not add randomized jitter.
+
+### Definition of done
+
+- [x] A separate privileged worker performs scheduled HTTPS retrieval.
+- [x] Metadata is authenticated before payload transfer and activation reuses the signed core.
+- [x] Transient failures retry with bounded exponential backoff.
+- [x] Rollout telemetry identifies deployment, ring, attempt, sequence, and result.
+- [x] Active and rollback content survive bounded retention pruning.
+- [x] Signing-key policy distinguishes trusted and revoked keys.
+- [x] Publish, validation, one-shot, install, status, and removal workflows exist.
+- [x] The monitoring service remains a read-only content consumer.
+
+### Next milestone
+
+Add safe live threat-content reload to the monitoring service. A new active
+snapshot should be reverified read-only, swapped atomically between scan events,
+reported through health telemetry, and abandoned without disrupting the current
+detectors when reload validation fails.
