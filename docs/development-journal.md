@@ -1202,3 +1202,33 @@ Add tamper-evident security telemetry with bounded local spooling, durable
 delivery checkpoints, and an authenticated collector boundary. Fleet operators
 should be able to correlate detections, response decisions, updater rollout,
 and live-reload health without granting the monitor broad network privileges.
+
+## 2026-10-22 — Milestone 11 patch: read-only reload polling
+
+### Problem found during the completion audit
+
+The live-reload poll used the privileged store-status operation. That operation
+creates missing storage directories and opens the updater lock for read/write
+access. The installed monitor intentionally receives only read and execute
+access to the content store, so its first reload poll could fail even though
+initial content loading was correctly read-only.
+
+### Correction
+
+- Added a separate status reader that validates the existing store directories
+  and reads the atomically replaced state file without creating directories or
+  acquiring the updater's writable operation lock.
+- Routed the monitoring service through the read-only status reader while
+  retaining the original locked operation for privileged CLI and updater use.
+- Added infrastructure and service regression tests that hold the updater lock
+  exclusively while the read-only status path succeeds.
+
+### Verification
+
+- Locked restore and formatter verification completed successfully.
+- The Release build completed with zero warnings and zero errors.
+- All 249 tests passed: 101 core, 77 infrastructure, 39 CLI, 21 monitoring
+  service, and 11 updater tests.
+- All nine PowerShell scripts parsed successfully.
+- All ten projects reported no known vulnerable direct or transitive NuGet
+  packages.
