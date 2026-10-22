@@ -1,5 +1,7 @@
 # UtoAegis
 
+Copyright © 2026 Francisco Jaimes. All rights reserved.
+
 UtoAegis is an incrementally developed Windows endpoint-security product. It
 currently combines safe SHA-256 hashing, a versioned local reputation database,
 streaming exact-byte signature detection, bounded directory traversal, and
@@ -604,3 +606,15 @@ a clean-file verdict.
 The next milestone should add tamper-evident security telemetry with durable
 delivery checkpoints, bounded local spooling, and an authenticated collector
 boundary for fleet health and detection events.
+
+## Ownership and license
+
+UtoAegis is proprietary software. Public visibility, when provided, is for
+portfolio evaluation only and does not grant permission to use, copy, modify,
+redistribute, or commercially exploit the source code. All commercial use
+rights are reserved exclusively to Francisco Jaimes. See [LICENSE](LICENSE) for
+the complete terms and [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) for the
+separate licenses governing external dependencies.
+
+Contributions are not accepted without a separate written ownership and
+licensing agreement.
