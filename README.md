@@ -614,7 +614,9 @@ portfolio evaluation only and does not grant permission to use, copy, modify,
 redistribute, or commercially exploit the source code. All commercial use
 rights are reserved exclusively to Francisco Jaimes. See [LICENSE](LICENSE) for
 the complete terms and [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) for the
-separate licenses governing external dependencies.
+separate licenses governing external dependencies. The private
+[ownership and copyright checklist](docs/ownership-and-copyright.md) records
+the repository controls and formal registration steps.
 
 Contributions are not accepted without a separate written ownership and
 licensing agreement.
