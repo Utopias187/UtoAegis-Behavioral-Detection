@@ -21,7 +21,7 @@ internal sealed class ServiceThreatContentSource(ThreatContentStore store) :
 {
     public ValueTask<ThreatContentStoreStatus> GetStatusAsync(
         CancellationToken cancellationToken = default) =>
-        store.GetStatusAsync(cancellationToken);
+        store.GetStatusReadOnlyAsync(cancellationToken);
 
     public async ValueTask<IServiceThreatContentLease> GetActiveAsync(
         CancellationToken cancellationToken = default) =>

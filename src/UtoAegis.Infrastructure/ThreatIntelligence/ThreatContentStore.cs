@@ -212,15 +212,17 @@ public sealed class ThreatContentStore
         await using var operationLock = AcquireOperationLock();
         var state = await ThreatContentStateFile.ReadAsync(_statePath, cancellationToken)
             .ConfigureAwait(false);
-        return state is null
-            ? new ThreatContentStoreStatus(false, null, null, null, null, 0)
-            : new ThreatContentStoreStatus(
-                true,
-                state.Active.Version,
-                state.Active.Sequence,
-                state.Previous?.Version,
-                state.Previous?.Sequence,
-                state.HighestAcceptedSequence);
+        return CreateStatus(state);
+    }
+
+    public async ValueTask<ThreatContentStoreStatus> GetStatusReadOnlyAsync(
+        CancellationToken cancellationToken = default)
+    {
+        EnsureRegularDirectory(_rootPath);
+        EnsureRegularDirectory(_versionsPath);
+        var state = await ThreatContentStateFile.ReadAsync(_statePath, cancellationToken)
+            .ConfigureAwait(false);
+        return CreateStatus(state);
     }
 
     public async ValueTask<ThreatContentPruneResult> PruneAsync(
@@ -588,6 +590,17 @@ public sealed class ThreatContentStore
             contentPath,
             Path.Combine(contentPath, ReputationDatabaseFileName),
             Path.Combine(contentPath, "signatures.jsonl"));
+
+    private static ThreatContentStoreStatus CreateStatus(ThreatContentState? state) =>
+        state is null
+            ? new ThreatContentStoreStatus(false, null, null, null, null, 0)
+            : new ThreatContentStoreStatus(
+                true,
+                state.Active.Version,
+                state.Active.Sequence,
+                state.Previous?.Version,
+                state.Previous?.Sequence,
+                state.HighestAcceptedSequence);
 
     private static void EnsureRegularDirectory(string path)
     {

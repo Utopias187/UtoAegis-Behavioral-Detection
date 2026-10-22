@@ -77,6 +77,25 @@ public sealed class ThreatContentStoreTests
     }
 
     [TestMethod]
+    public async Task GetStatusReadOnlyAsync_ActiveStore_DoesNotAcquireUpdateLock()
+    {
+        var store = CreateStore();
+        await store.ApplyAsync(await CreateBundleAsync(7, 'a'));
+        var lockPath = Path.Combine(_testDirectory, "content-store", "update.lock");
+        using var updateLock = new FileStream(
+            lockPath,
+            FileMode.Open,
+            FileAccess.ReadWrite,
+            FileShare.None);
+
+        var status = await store.GetStatusReadOnlyAsync();
+
+        Assert.IsTrue(status.HasActiveContent);
+        Assert.AreEqual(7L, status.ActiveSequence);
+        Assert.AreEqual(7L, status.HighestAcceptedSequence);
+    }
+
+    [TestMethod]
     public async Task RollbackAsync_PreviousBundle_RestoresContentWithoutLoweringSequenceFloor()
     {
         var store = CreateStore();
