@@ -1263,8 +1263,8 @@ initial content loading was correctly read-only.
 
 ### Comment audit
 
-- Found no `TODO`, `FIXME`, `HACK`, or `XXX` markers in the current source or
-  milestone snapshots.
+- Found no unfinished-work or temporary-workaround markers in the current
+  source or milestone snapshots.
 - Retained the 15 current C# comment lines: five short XML documentation blocks
   that explain public scanner and reload contracts.
 - Added no narrative implementation comments; names, types, and tests remain
