@@ -1257,6 +1257,9 @@ initial content loading was correctly read-only.
   addition to locked restore, Release build, tests, and dependency auditing.
 - Added baseline CI and dependency-update configuration to the two earliest
   milestone repositories, which predated those controls.
+- Refreshed the current product's direct dependencies to Microsoft.Data.Sqlite
+  10.0.14, Microsoft.Extensions.Hosting.WindowsServices 10.0.14, and MSTest
+  4.5.2, then regenerated every committed NuGet lock file.
 
 ### Comment audit
 
