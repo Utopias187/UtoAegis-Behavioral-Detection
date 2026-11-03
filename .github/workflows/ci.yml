@@ -36,8 +36,33 @@ jobs:
       - name: Build
         run: dotnet build UtoAegis.slnx --no-restore --configuration Release
 
+      - name: Verify formatting
+        run: dotnet format UtoAegis.slnx --verify-no-changes --no-restore
+
       - name: Test
         run: dotnet test UtoAegis.slnx --no-build --configuration Release
+
+      - name: Parse PowerShell scripts
+        shell: pwsh
+        run: |
+          $hasErrors = $false
+          Get-ChildItem scripts -Recurse -Filter *.ps1 | ForEach-Object {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              $_.FullName,
+              [ref]$tokens,
+              [ref]$errors) | Out-Null
+
+            foreach ($parseError in $errors) {
+              Write-Error "$($_.FullName): $($parseError.Message)"
+              $hasErrors = $true
+            }
+          }
+
+          if ($hasErrors) {
+            throw "One or more PowerShell scripts failed to parse."
+          }
 
       - name: Report vulnerable dependencies
         run: dotnet list UtoAegis.slnx package --vulnerable --include-transitive --no-restore

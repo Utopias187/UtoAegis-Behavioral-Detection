@@ -7,3 +7,5 @@ TestResults/
 .idea/
 .dotnet-cli/
 .packages/
+output/
+tmp/

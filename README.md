@@ -618,5 +618,6 @@ separate licenses governing external dependencies. The private
 [ownership and copyright checklist](docs/ownership-and-copyright.md) records
 the repository controls and formal registration steps.
 
-Contributions are not accepted without a separate written ownership and
-licensing agreement.
+Security reports should follow [SECURITY.md](SECURITY.md). Contributions are
+governed by [CONTRIBUTING.md](CONTRIBUTING.md) and are not accepted without a
+separate written ownership and licensing agreement.
