@@ -76,18 +76,18 @@ public sealed class GuardConfigurationTests
 
         var document = new
         {
-            utoAegisGuard = new
+            UtoAegisGuard = new
             {
-                policyBundlePath = policy,
-                policyStatePath = Path.Combine(externalRoot, "state", "policy-state.json"),
-                trustedSigningKeys = new[]
+                PolicyBundlePath = policy,
+                PolicyStatePath = Path.Combine(externalRoot, "state", "policy-state.json"),
+                TrustedSigningKeys = new[]
                 {
-                    new { keyId = "policy-key-1", publicKeyPath = keyPath }
+                    new { KeyId = "policy-key-1", PublicKeyPath = keyPath }
                 },
-                recoveryStatePath = Path.Combine(externalRoot, "state", "recovery-state.json"),
-                securityTelemetrySpoolPath = Path.Combine(externalRoot, "telemetry"),
-                deploymentId = "endpoint-001",
-                telemetryMaximumRecords = 512
+                RecoveryStatePath = Path.Combine(externalRoot, "state", "recovery-state.json"),
+                SecurityTelemetrySpoolPath = Path.Combine(externalRoot, "telemetry"),
+                DeploymentId = "endpoint-001",
+                TelemetryMaximumRecords = 512
             }
         };
         var configurationPath = Path.Combine(testDirectory, "appsettings.json");

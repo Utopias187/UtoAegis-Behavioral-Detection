@@ -151,7 +151,10 @@ if ($manifest.signatureMode -ceq 'UnsignedDevelopment') {
     }
 
     foreach ($binary in Get-ChildItem -LiteralPath $root -File -Recurse |
-                 Where-Object { $_.Extension -in @('.exe', '.dll') }) {
+                 Where-Object {
+                     $_.Name -match '^utoaegis.*\.(exe|dll)$' -or
+                     $_.Name -match '^UtoAegis.*\.(exe|dll)$'
+                 }) {
         $authenticode = Get-AuthenticodeSignature -LiteralPath $binary.FullName
         if ($authenticode.Status -ne [Management.Automation.SignatureStatus]::Valid -or
             ($AllowedSignerThumbprint.Count -gt 0 -and

@@ -14,7 +14,7 @@ internal sealed record GuardConfiguration(
 {
     private const int MaximumConfigurationLength = 256 * 1024;
 
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
+    private static readonly JsonSerializerOptions SerializerOptions = new()
     {
         MaxDepth = 8,
         PropertyNameCaseInsensitive = false,

@@ -136,6 +136,7 @@ try {
         'services/updater' = 'src/UtoAegis.Updater/UtoAegis.Updater.csproj'
         'services/telemetry' = 'src/UtoAegis.Telemetry/UtoAegis.Telemetry.csproj'
         'tools' = 'src/UtoAegis.Cli/UtoAegis.Cli.csproj'
+        'tools/guard' = 'src/UtoAegis.Guard/UtoAegis.Guard.csproj'
     }
     foreach ($publication in $publications.GetEnumerator()) {
         $project = Join-Path $repositoryRoot $publication.Value

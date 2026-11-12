@@ -70,5 +70,9 @@ jobs:
           ./tests/release/ReleaseMetadata.Tests.ps1
           ./tests/release/DeploymentPlan.Tests.ps1
 
+      - name: Test authenticated runtime policy
+        shell: pwsh
+        run: ./tests/runtime-policy/RuntimePolicyScripts.Tests.ps1
+
       - name: Report vulnerable dependencies
         run: dotnet list UtoAegis.slnx package --vulnerable --include-transitive --no-restore
