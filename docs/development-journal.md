@@ -1477,3 +1477,134 @@ host and are not run by CI. The release is a ZIP rather than an MSI or MSIX.
 Protect endpoint runtime policy and installation state: authenticate policy
 bundles, detect service configuration and ACL drift, emit tamper telemetry, and
 add bounded automated recovery without granting services broader privileges.
+
+## 2026-11-12 — Milestone 14: authenticated runtime policy and integrity guard
+
+### Goal
+
+Move response behavior and endpoint integrity expectations out of locally
+editable configuration and into an offline-signed policy. Detect unauthorized
+service, executable, and ACL changes, report them through the existing
+tamper-evident telemetry boundary, and permit only explicitly authorized,
+persistently rate-limited recovery without broadening the monitor, updater, or
+forwarder service identities.
+
+### Authenticated policy boundary
+
+- Added a strict runtime policy model covering response rules, protected service
+  paths and hashes, accounts, start modes, owner/group/DACL baselines, audit
+  cadence, and recovery bounds.
+- Added exact-byte ECDSA P-256/SHA-256 signatures with a two-file bundle format.
+  The endpoint receives public keys only; policy private keys remain offline.
+- Rejected unknown or duplicate JSON properties, unsafe or duplicate paths,
+  unsupported algorithms, excessive collections, invalid bounds, future or
+  expired policy, extra bundle files, reparse points, and invalid signatures.
+- Persisted the highest accepted sequence and exact manifest hash with
+  same-directory atomic replacement and an exclusive operation lock. Lower
+  sequences and changed content at the same sequence fail closed, while an
+  identical sequence and hash permit safe process restarts.
+- Integrated policy verification before monitor startup. Authenticated response
+  rules replace the local response section; quarantine still requires the
+  separately configured restricted vault.
+- Added policy identity, sequence, signer, expiration, and manifest hash to the
+  Event Log and monitor telemetry startup record.
+
+### Integrity Guard and recovery
+
+- Added `UtoAegis.Guard`, a one-shot Windows console application intended for a
+  protected SYSTEM scheduled task rather than another continuously privileged
+  service.
+- Added native SCM inspection for exact no-argument binary paths, service
+  accounts, and automatic, delayed-automatic, manual, or disabled start modes.
+- Added regular-file validation and streaming SHA-256 verification for every
+  protected executable. Missing services, paths, and binaries, changed binaries,
+  reparse points, and inspection failures remain nonrecoverable findings.
+- Added normalized owner, group, and DACL inspection for selected regular files
+  and directories. Only exact SDDL carried by authenticated policy can be
+  restored.
+- Required recovery authorization in both the signed policy and the scheduled
+  task installation. Multiple findings for one service are coalesced into one
+  operation.
+- Persisted recovery reservations, pruned attempts only after the signed window,
+  and failed closed at the signed maximum. A higher authenticated sequence begins
+  a new budget; corrupt state does not silently reset it.
+- Service recovery changes only signed SCM fields. A previously running service
+  is stopped, corrected, restarted, and bounded to a 30-second state transition;
+  a stopped service remains stopped and a disabled service is not restarted.
+- Limited automatic account recovery to passwordless built-in or matching
+  virtual service identities. Password-backed accounts remain auditable but
+  require operator-controlled credential handling.
+
+### Deployment, telemetry, and releases
+
+- Added an elevated known-good baseline exporter and a separate offline policy
+  signer. Signing exact exported bytes keeps the private key off endpoints.
+- Added Guard publish, protected scheduled-task installation, status, and
+  recoverable removal workflows. Recovery remains an explicit installer switch.
+- Added explicit pre-creation of missing telemetry producer spools so deployment
+  ordering cannot silently hide a misspelled source path.
+- Added an independent `guard` telemetry chain. Audit records retain initial and
+  remaining finding counts, bounded details, policy identity, recovery intent,
+  recovery result, and rate-limit state. Native SCM and recovery failures are
+  converted into failure telemetry.
+- Added the Guard to both locked Windows release architectures, the CycloneDX
+  project graph, archive inventory, code-signing selection, and operator scripts.
+- Corrected production release verification to require Authenticode only on
+  UtoAegis-owned binaries. Third-party assemblies retain their publishers' bytes
+  and remain authenticated by the detached signed release manifest as designed.
+
+### Verification
+
+- Locked restore completed for all 14 projects and all 14 NuGet lock files.
+- The Release build completed with zero warnings and zero errors, and formatter
+  verification completed without changes.
+- All 290 .NET tests passed: 104 core, 91 infrastructure, 39 CLI, 25 monitoring
+  service, 12 updater, 7 telemetry, and 12 Guard tests.
+- All three PowerShell integration suites passed: release metadata and tamper
+  rejection, side-effect-free deployment planning, and runtime policy signing,
+  validation, and tamper rejection.
+- All 30 PowerShell scripts parsed successfully. The unfinished-work marker scan
+  was clean, and the 15 C# comment lines remain the five short XML documentation
+  blocks retained by the prior comment audit.
+- All 14 projects reported no known vulnerable direct or transitive NuGet
+  packages against the current advisory index.
+- The official CycloneDX 1.7 schema accepted the generated 37-component SBOM.
+- Clean-commit `win-x64` and `win-arm64` development candidates each contained
+  and verified exactly 197 inventoried files. Both extracted archives included
+  the Guard executable and baseline, signing, installation, status, and removal
+  tools.
+
+### Trust limits
+
+The Guard detects drift relative to what the trusted operator signed; exporting
+a baseline from an already compromised host authenticates the wrong state. A
+local administrator or kernel compromise can disable Task Scheduler, stop
+telemetry, delete endpoint state, or replace the operating system. Collector-side
+anchors and missing-heartbeat alerting remain necessary.
+
+Automated tests exercise policy authentication, parsing, anti-rollback state,
+recovery decisions, persistent bounds, configuration isolation, telemetry
+integration, packaging, and tamper rejection. Live SCM mutation, service restart,
+and owner/group/DACL repair are intentionally not executed on the development
+machine because they require installed test services and a controlled elevated
+Windows host. Production Authenticode/CMS signing still requires a trusted
+code-signing certificate that is not installed locally.
+
+### Definition of done
+
+- [x] Response behavior can be sourced from an offline-signed runtime policy.
+- [x] Policy expiry, rollback, same-sequence changes, and tampering fail closed.
+- [x] SCM configuration, executable hashes, and selected ACLs are audited.
+- [x] Privileged repair is isolated from long-running endpoint services.
+- [x] Recovery requires signed authorization plus explicit deployment opt-in.
+- [x] Recovery attempts are persistent, bounded, and visible.
+- [x] Missing or modified executable content is never reconstructed by the Guard.
+- [x] Guard findings and failures use an independent tamper-evident chain.
+- [x] Both Windows release architectures include the Guard and operator tooling.
+- [x] Deployment and incident-response limits are documented.
+
+### Next milestone
+
+Add authenticated endpoint enrollment and policy distribution with per-device
+identity, staged rollout rings, revocation, durable policy acknowledgement, and
+fleet health visibility while keeping release and policy signing keys offline.
