@@ -5,6 +5,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using UtoAegis.Core.ThreatIntelligence;
 using UtoAegis.Infrastructure.ThreatIntelligence;
+using UtoAegis.Infrastructure.Telemetry;
 
 namespace UtoAegis.Updater.Tests;
 
@@ -178,6 +179,39 @@ public sealed class ThreatUpdaterEngineTests
         Assert.AreEqual(3, downloader.Attempts);
         CollectionAssert.AreEqual(RetryDelays, delays.ToArray());
         CollectionAssert.AreEqual(ExhaustedEvents, ReadTelemetryEvents());
+    }
+
+    [TestMethod]
+    public async Task TelemetryWriter_RolloutEvent_IsMirroredToTamperEvidentSpool()
+    {
+        var spoolPath = Path.Combine(_telemetryDirectory, "security");
+        using var writer = new UpdaterTelemetryWriter(
+            _telemetryPath,
+            new SecurityTelemetryWriter(
+                new SecurityTelemetrySpool(spoolPath),
+                "updater",
+                "endpoint-001",
+                new FixedTimeProvider(Now)));
+        var record = new UpdaterTelemetryRecord(
+            Now,
+            "run-001",
+            "endpoint-001",
+            "pilot",
+            UpdaterTelemetryEvent.CheckStarted,
+            0,
+            6,
+            null,
+            null,
+            "Checking the configured channel.");
+
+        await writer.WriteAsync(record);
+        using var reader = new SecurityTelemetrySpool(spoolPath);
+        var batch = await reader.ReadBatchAsync(SecurityTelemetryCheckpoint.Empty, 10);
+
+        Assert.HasCount(1, batch);
+        Assert.AreEqual("updater.checkStarted", batch[0].EventType);
+        Assert.AreEqual("run-001", batch[0].CorrelationId);
+        Assert.AreEqual("pilot", batch[0].Payload.GetProperty("rolloutRing").GetString());
     }
 
     private ThreatUpdaterEngine CreateEngine(

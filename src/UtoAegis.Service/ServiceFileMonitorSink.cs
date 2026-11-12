@@ -3,6 +3,7 @@ using UtoAegis.Core.History;
 using UtoAegis.Core.Monitoring;
 using UtoAegis.Core.Response;
 using UtoAegis.Core.Scanning;
+using UtoAegis.Infrastructure.Telemetry;
 
 namespace UtoAegis.Service;
 
@@ -11,7 +12,8 @@ internal sealed class ServiceFileMonitorSink(
     DetectionResponseEngine responseEngine,
     IScanHistoryStore? historyStore,
     string monitorRoot,
-    bool recursive) : IFileMonitorSink
+    bool recursive,
+    SecurityTelemetryWriter? securityTelemetry = null) : IFileMonitorSink
 {
     private long scannedFileCount;
     private long detectionCount;
@@ -24,6 +26,7 @@ internal sealed class ServiceFileMonitorSink(
         FileMonitorScanResult result,
         CancellationToken cancellationToken = default)
     {
+        var correlationId = Guid.NewGuid();
         Interlocked.Increment(ref scannedFileCount);
         ServiceLog.FileScanned(
             logger,
@@ -32,13 +35,13 @@ internal sealed class ServiceFileMonitorSink(
             result.Result.IsDetected);
         await PersistAsync(
             ScanHistoryRecord.FromFileScan(
-                Guid.NewGuid(),
+                correlationId,
                 result.Path,
                 result.StartedUtc,
                 result.CompletedUtc,
                 result.Result),
             cancellationToken);
-        await RespondAsync(result.Result, cancellationToken);
+        await RespondAsync(result.Result, correlationId, cancellationToken);
     }
 
     public async ValueTask RecoveryScanCompletedAsync(
@@ -65,7 +68,7 @@ internal sealed class ServiceFileMonitorSink(
 
         foreach (var file in result.Result.Files.Where(file => file.Result.IsDetected))
         {
-            await RespondAsync(file.Result, cancellationToken);
+            await RespondAsync(file.Result, Guid.NewGuid(), cancellationToken);
         }
     }
 
@@ -94,6 +97,7 @@ internal sealed class ServiceFileMonitorSink(
 
     private async ValueTask RespondAsync(
         FileScanResult result,
+        Guid correlationId,
         CancellationToken cancellationToken)
     {
         if (!result.IsDetected)
@@ -117,6 +121,32 @@ internal sealed class ServiceFileMonitorSink(
             decision.Path ?? "unknown",
             decision.Kind,
             decision.Reason);
+        if (securityTelemetry is not null)
+        {
+            try
+            {
+                await securityTelemetry.WriteAsync(
+                    "detection.response",
+                    correlationId.ToString("N"),
+                    new
+                    {
+                        path = decision.Path,
+                        sha256 = result.FileHash.Sha256,
+                        fileSizeBytes = result.FileHash.FileSizeBytes,
+                        reputation = result.Reputation?.Status.ToString(),
+                        signatureIds = result.Signatures?.Matches
+                            .Select(match => match.RuleId)
+                            .ToArray() ?? [],
+                        decision = decision.Kind.ToString(),
+                        decision.Reason
+                    },
+                    cancellationToken);
+            }
+            catch (SecurityTelemetryException exception)
+            {
+                ServiceLog.SecurityTelemetryFailed(logger, exception);
+            }
+        }
     }
 
     private async ValueTask PersistAsync(

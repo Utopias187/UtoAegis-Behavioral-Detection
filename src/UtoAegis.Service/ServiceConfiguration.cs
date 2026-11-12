@@ -24,6 +24,9 @@ public sealed class ServiceConfiguration
         IReadOnlyDictionary<string, string> trustedSigningKeyPaths,
         string? historyPath,
         string? vaultPath,
+        string? securityTelemetrySpoolPath,
+        string? deploymentId,
+        int telemetryMaximumRecords,
         int maximumConcurrency,
         int queueCapacity,
         int watcherBufferSize,
@@ -41,6 +44,9 @@ public sealed class ServiceConfiguration
         TrustedSigningKeyPaths = trustedSigningKeyPaths;
         HistoryPath = historyPath;
         VaultPath = vaultPath;
+        SecurityTelemetrySpoolPath = securityTelemetrySpoolPath;
+        DeploymentId = deploymentId;
+        TelemetryMaximumRecords = telemetryMaximumRecords;
         MaximumConcurrency = maximumConcurrency;
         QueueCapacity = queueCapacity;
         WatcherBufferSize = watcherBufferSize;
@@ -67,6 +73,12 @@ public sealed class ServiceConfiguration
     public string? HistoryPath { get; }
 
     public string? VaultPath { get; }
+
+    public string? SecurityTelemetrySpoolPath { get; }
+
+    public string? DeploymentId { get; }
+
+    public int TelemetryMaximumRecords { get; }
 
     public int MaximumConcurrency { get; }
 
@@ -111,6 +123,11 @@ public sealed class ServiceConfiguration
                 paths.Add(ContentStorePath);
             }
 
+            if (SecurityTelemetrySpoolPath is not null)
+            {
+                paths.Add(SecurityTelemetrySpoolPath);
+            }
+
             paths.AddRange(TrustedSigningKeyPaths.Values);
 
             return paths;
@@ -138,6 +155,38 @@ public sealed class ServiceConfiguration
                 baseDirectory);
             var historyPath = OptionalPath(section, "HistoryPath", baseDirectory);
             var vaultPath = OptionalPath(section, "VaultPath", baseDirectory);
+            var securityTelemetrySpoolPath = OptionalPath(
+                section,
+                "SecurityTelemetrySpoolPath",
+                baseDirectory);
+            var deploymentId = OptionalIdentifier(section, "DeploymentId");
+            if (securityTelemetrySpoolPath is not null)
+            {
+                if (deploymentId is null)
+                {
+                    throw new ServiceConfigurationException(
+                        "SecurityTelemetrySpoolPath requires DeploymentId.");
+                }
+
+                if (File.Exists(securityTelemetrySpoolPath) ||
+                    (Directory.Exists(securityTelemetrySpoolPath) &&
+                     File.GetAttributes(securityTelemetrySpoolPath)
+                         .HasFlag(FileAttributes.ReparsePoint)))
+                {
+                    throw new ServiceConfigurationException(
+                        "SecurityTelemetrySpoolPath must reference a regular directory path.");
+                }
+            }
+
+            var telemetryMaximumRecords = ReadInt(
+                section,
+                "TelemetryMaximumRecords",
+                10_000);
+            if (telemetryMaximumRecords is < 1 or > 1_000_000)
+            {
+                throw new ServiceConfigurationException(
+                    "TelemetryMaximumRecords must be from 1 through 1000000.");
+            }
             if (contentStorePath is null && databasePath is null && signaturePath is null)
             {
                 throw new ServiceConfigurationException(
@@ -182,7 +231,8 @@ public sealed class ServiceConfiguration
                 signaturePath,
                 contentStorePath,
                 historyPath,
-                vaultPath);
+                vaultPath,
+                securityTelemetrySpoolPath);
 
             var responseSection = section.GetSection("Response");
             var mode = ParseEnum(
@@ -206,6 +256,13 @@ public sealed class ServiceConfiguration
                     "to preserve least privilege and prevent monitoring loops.");
             }
 
+            if (securityTelemetrySpoolPath is not null &&
+                IsWithin(monitorRoot, securityTelemetrySpoolPath))
+            {
+                throw new ServiceConfigurationException(
+                    "SecurityTelemetrySpoolPath must be outside MonitorRoot to prevent monitoring loops.");
+            }
+
             if (contentStorePath is not null && IsWithin(monitorRoot, contentStorePath))
             {
                 throw new ServiceConfigurationException(
@@ -214,6 +271,9 @@ public sealed class ServiceConfiguration
 
             var writableDirectories = writablePaths
                 .Select(path => path == vaultPath ? path : Path.GetDirectoryName(path)!)
+                .Concat(securityTelemetrySpoolPath is null
+                    ? []
+                    : [securityTelemetrySpoolPath])
                 .Distinct(OperatingSystem.IsWindows()
                     ? StringComparer.OrdinalIgnoreCase
                     : StringComparer.Ordinal)
@@ -327,6 +387,9 @@ public sealed class ServiceConfiguration
                 trustedSigningKeyPaths,
                 historyPath,
                 vaultPath,
+                securityTelemetrySpoolPath,
+                deploymentId,
+                telemetryMaximumRecords,
                 maximumConcurrency,
                 queueCapacity,
                 watcherBufferSize,
@@ -368,6 +431,28 @@ public sealed class ServiceConfiguration
         }
 
         return ResolvePath(value, baseDirectory);
+    }
+
+    private static string? OptionalIdentifier(IConfiguration section, string key)
+    {
+        var value = section[key]?.Trim();
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        if (value.Length > 64 ||
+            !char.IsAsciiLetterOrDigit(value[0]) ||
+            !char.IsAsciiLetterOrDigit(value[^1]) ||
+            value.Any(character =>
+                !char.IsAsciiLetterOrDigit(character) &&
+                character is not '.' and not '-' and not '_'))
+        {
+            throw new ServiceConfigurationException(
+                $"UtoAegis:{key} must use 1 to 64 path-safe ASCII characters.");
+        }
+
+        return value;
     }
 
     private static string ResolvePath(string value, string baseDirectory)
@@ -505,7 +590,7 @@ public sealed class ServiceConfiguration
         if (values.Distinct(comparer).Count() != values.Length)
         {
             throw new ServiceConfigurationException(
-                "Database, signature, content store, history, and vault paths must be distinct.");
+                "Database, signature, content store, history, vault, and telemetry paths must be distinct.");
         }
     }
 

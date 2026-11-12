@@ -11,6 +11,7 @@ public sealed class UpdaterConfigurationTests
     private string _contentDirectory = null!;
     private string _downloadDirectory = null!;
     private string _telemetryDirectory = null!;
+    private string _securityTelemetryDirectory = null!;
     private string _keyPath = null!;
 
     [TestInitialize]
@@ -24,6 +25,7 @@ public sealed class UpdaterConfigurationTests
         _contentDirectory = Path.Combine(_testDirectory, "content");
         _downloadDirectory = Path.Combine(_testDirectory, "downloads");
         _telemetryDirectory = Path.Combine(_testDirectory, "telemetry");
+        _securityTelemetryDirectory = Path.Combine(_testDirectory, "security-telemetry");
         var policyDirectory = Path.Combine(_testDirectory, "policy");
         foreach (var directory in new[]
         {
@@ -31,6 +33,7 @@ public sealed class UpdaterConfigurationTests
             _contentDirectory,
             _downloadDirectory,
             _telemetryDirectory,
+            _securityTelemetryDirectory,
             policyDirectory
         })
         {
@@ -61,6 +64,8 @@ public sealed class UpdaterConfigurationTests
         Assert.AreEqual(_contentDirectory, result.ContentStorePath);
         Assert.AreEqual(_downloadDirectory, result.DownloadPath);
         Assert.AreEqual(Path.Combine(_telemetryDirectory, "updates.jsonl"), result.TelemetryPath);
+        Assert.AreEqual(_securityTelemetryDirectory, result.SecurityTelemetrySpoolPath);
+        Assert.AreEqual(10_000, result.TelemetryMaximumRecords);
         Assert.AreEqual("endpoint-001", result.DeploymentId);
         Assert.AreEqual("pilot", result.RolloutRing);
         Assert.AreEqual(TimeSpan.FromMinutes(10), result.PollInterval);
@@ -168,6 +173,7 @@ public sealed class UpdaterConfigurationTests
             ["UtoAegisUpdater:TelemetryPath"] = Path.Combine(
                 _telemetryDirectory,
                 "updates.jsonl"),
+            ["UtoAegisUpdater:SecurityTelemetrySpoolPath"] = _securityTelemetryDirectory,
             ["UtoAegisUpdater:DeploymentId"] = "endpoint-001",
             ["UtoAegisUpdater:RolloutRing"] = "pilot",
             ["UtoAegisUpdater:PollIntervalSeconds"] = "600",

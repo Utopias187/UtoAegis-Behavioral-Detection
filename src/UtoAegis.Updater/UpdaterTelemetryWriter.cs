@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using UtoAegis.Infrastructure.Telemetry;
 
 namespace UtoAegis.Updater;
 
@@ -13,12 +14,16 @@ public sealed class UpdaterTelemetryWriter : IDisposable
     };
 
     private readonly string _path;
+    private readonly SecurityTelemetryWriter? _securityTelemetry;
     private readonly SemaphoreSlim _writeLock = new(1, 1);
 
-    public UpdaterTelemetryWriter(string path)
+    public UpdaterTelemetryWriter(
+        string path,
+        SecurityTelemetryWriter? securityTelemetry = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         _path = Path.GetFullPath(path);
+        _securityTelemetry = securityTelemetry;
     }
 
     public async ValueTask WriteAsync(
@@ -45,6 +50,14 @@ public sealed class UpdaterTelemetryWriter : IDisposable
             await stream.WriteAsync(bytes, cancellationToken).ConfigureAwait(false);
             await stream.WriteAsync(NewLine, cancellationToken).ConfigureAwait(false);
             await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
+            if (_securityTelemetry is not null)
+            {
+                await _securityTelemetry.WriteAsync(
+                    $"updater.{JsonNamingPolicy.CamelCase.ConvertName(record.Event.ToString())}",
+                    record.RunId,
+                    record,
+                    cancellationToken).ConfigureAwait(false);
+            }
         }
         finally
         {
@@ -52,5 +65,9 @@ public sealed class UpdaterTelemetryWriter : IDisposable
         }
     }
 
-    public void Dispose() => _writeLock.Dispose();
+    public void Dispose()
+    {
+        _securityTelemetry?.Dispose();
+        _writeLock.Dispose();
+    }
 }

@@ -5,6 +5,7 @@ using UtoAegis.Core.Quarantine;
 using UtoAegis.Core.Reputation;
 using UtoAegis.Core.Response;
 using UtoAegis.Core.Scanning;
+using UtoAegis.Infrastructure.Telemetry;
 
 namespace UtoAegis.Service.Tests;
 
@@ -93,17 +94,61 @@ public sealed class ServiceFileMonitorSinkTests
         Assert.AreEqual(ScanHistoryOutcome.Failed, history.Records[0].Outcome);
     }
 
+    [TestMethod]
+    public async Task FileScannedAsync_Detection_WritesCorrelatedSecurityTelemetry()
+    {
+        var testDirectory = Path.Combine(
+            Path.GetTempPath(),
+            "UtoAegis.Service.Tests",
+            Guid.NewGuid().ToString("N"));
+        try
+        {
+            using var telemetry = new SecurityTelemetryWriter(
+                new SecurityTelemetrySpool(testDirectory),
+                "monitor",
+                "endpoint-001");
+            var sink = CreateSink(
+                new DetectionResponseEngine(new ResponsePolicy()),
+                securityTelemetry: telemetry);
+            var now = DateTimeOffset.UtcNow;
+
+            await sink.FileScannedAsync(new FileMonitorScanResult(
+                "sample.bin",
+                FileChangeKind.Created,
+                now,
+                now,
+                now,
+                DetectedScan("sample.bin")));
+            using var reader = new SecurityTelemetrySpool(testDirectory);
+            var batch = await reader.ReadBatchAsync(SecurityTelemetryCheckpoint.Empty, 10);
+
+            Assert.HasCount(1, batch);
+            Assert.AreEqual("detection.response", batch[0].EventType);
+            Assert.AreEqual("endpoint-001", batch[0].DeploymentId);
+            Assert.AreEqual(Hash, batch[0].Payload.GetProperty("sha256").GetString());
+        }
+        finally
+        {
+            if (Directory.Exists(testDirectory))
+            {
+                Directory.Delete(testDirectory, recursive: true);
+            }
+        }
+    }
+
     private static ServiceFileMonitorSink CreateSink(
         DetectionResponseEngine responseEngine,
         IScanHistoryStore? historyStore = null,
         string? monitorRoot = null,
-        bool recursive = true) =>
+        bool recursive = true,
+        SecurityTelemetryWriter? securityTelemetry = null) =>
         new(
             NullLogger.Instance,
             responseEngine,
             historyStore,
             monitorRoot ?? Path.GetFullPath("monitored"),
-            recursive);
+            recursive,
+            securityTelemetry);
 
     private static FileScanResult DetectedScan(string path)
     {

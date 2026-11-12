@@ -9,6 +9,7 @@ public sealed class ServiceConfigurationTests
     private string testDirectory = null!;
     private string monitorRoot = null!;
     private string externalContentStore = null!;
+    private string externalTelemetrySpool = null!;
 
     [TestInitialize]
     public void Initialize()
@@ -19,6 +20,7 @@ public sealed class ServiceConfigurationTests
             Guid.NewGuid().ToString("N"));
         monitorRoot = Path.Combine(testDirectory, "monitored");
         externalContentStore = testDirectory + "-content";
+        externalTelemetrySpool = testDirectory + "-telemetry";
         Directory.CreateDirectory(monitorRoot);
     }
 
@@ -33,6 +35,11 @@ public sealed class ServiceConfigurationTests
         if (Directory.Exists(externalContentStore))
         {
             Directory.Delete(externalContentStore, recursive: true);
+        }
+
+        if (Directory.Exists(externalTelemetrySpool))
+        {
+            Directory.Delete(externalTelemetrySpool, recursive: true);
         }
     }
 
@@ -68,6 +75,37 @@ public sealed class ServiceConfigurationTests
             ServiceConfiguration.Load(configuration, testDirectory));
 
         StringAssert.Contains(exception.Message, "requires VaultPath");
+    }
+
+    [TestMethod]
+    public void Load_SecurityTelemetry_RequiresDeploymentAndExcludesSpool()
+    {
+        Directory.CreateDirectory(externalTelemetrySpool);
+        var missingDeployment = BuildConfiguration(new Dictionary<string, string?>
+        {
+            ["UtoAegis:MonitorRoot"] = monitorRoot,
+            ["UtoAegis:DatabasePath"] = "state/reputation.db",
+            ["UtoAegis:SecurityTelemetrySpoolPath"] = externalTelemetrySpool
+        });
+
+        Assert.ThrowsExactly<ServiceConfigurationException>(() =>
+            ServiceConfiguration.Load(missingDeployment, testDirectory));
+
+        var configured = BuildConfiguration(new Dictionary<string, string?>
+        {
+            ["UtoAegis:MonitorRoot"] = monitorRoot,
+            ["UtoAegis:DatabasePath"] = "state/reputation.db",
+            ["UtoAegis:SecurityTelemetrySpoolPath"] = externalTelemetrySpool,
+            ["UtoAegis:DeploymentId"] = "endpoint-001",
+            ["UtoAegis:TelemetryMaximumRecords"] = "512"
+        });
+        var result = ServiceConfiguration.Load(configured, testDirectory);
+
+        Assert.AreEqual("endpoint-001", result.DeploymentId);
+        Assert.AreEqual(512, result.TelemetryMaximumRecords);
+        CollectionAssert.Contains(
+            result.OperationalExclusions.ToArray(),
+            externalTelemetrySpool);
     }
 
     [TestMethod]

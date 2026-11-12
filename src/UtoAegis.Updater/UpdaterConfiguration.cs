@@ -16,6 +16,8 @@ public sealed class UpdaterConfiguration
         string contentStorePath,
         string downloadPath,
         string telemetryPath,
+        string? securityTelemetrySpoolPath,
+        int telemetryMaximumRecords,
         string deploymentId,
         string rolloutRing,
         TimeSpan pollInterval,
@@ -28,6 +30,8 @@ public sealed class UpdaterConfiguration
         ContentStorePath = contentStorePath;
         DownloadPath = downloadPath;
         TelemetryPath = telemetryPath;
+        SecurityTelemetrySpoolPath = securityTelemetrySpoolPath;
+        TelemetryMaximumRecords = telemetryMaximumRecords;
         DeploymentId = deploymentId;
         RolloutRing = rolloutRing;
         PollInterval = pollInterval;
@@ -44,6 +48,10 @@ public sealed class UpdaterConfiguration
     public string DownloadPath { get; }
 
     public string TelemetryPath { get; }
+
+    public string? SecurityTelemetrySpoolPath { get; }
+
+    public int TelemetryMaximumRecords { get; }
 
     public string DeploymentId { get; }
 
@@ -101,13 +109,27 @@ public sealed class UpdaterConfiguration
                 resolvedBase);
             var telemetryDirectory = Path.GetDirectoryName(telemetryPath)!;
             EnsureRegularDirectory(telemetryDirectory, "TelemetryPath directory");
+            var securityTelemetrySpoolPath = OptionalDirectory(
+                section,
+                "SecurityTelemetrySpoolPath",
+                resolvedBase);
+            var telemetryMaximumRecords = ReadInt(
+                section,
+                "TelemetryMaximumRecords",
+                defaultValue: 10_000);
+            if (telemetryMaximumRecords is < 1 or > 1_000_000)
+            {
+                throw new UpdaterConfigurationException(
+                    "TelemetryMaximumRecords must be from 1 through 1000000.");
+            }
 
             var writableDirectories = new[]
             {
                 contentStorePath,
                 downloadPath,
-                telemetryDirectory
-            };
+                telemetryDirectory,
+                securityTelemetrySpoolPath
+            }.Where(path => path is not null).Select(path => path!).ToArray();
             if (writableDirectories.Any(path =>
                     PathEquals(path, Path.GetPathRoot(path)!) ||
                     IsWithin(path, resolvedBase) ||
@@ -179,6 +201,8 @@ public sealed class UpdaterConfiguration
                 contentStorePath,
                 downloadPath,
                 telemetryPath,
+                securityTelemetrySpoolPath,
+                telemetryMaximumRecords,
                 deploymentId,
                 rolloutRing,
                 pollInterval,
@@ -257,6 +281,22 @@ public sealed class UpdaterConfiguration
         string baseDirectory)
     {
         var path = RequiredFilePath(section, key, baseDirectory);
+        EnsureRegularDirectory(path, key);
+        return path;
+    }
+
+    private static string? OptionalDirectory(
+        IConfiguration section,
+        string key,
+        string baseDirectory)
+    {
+        var value = section[key];
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var path = ResolvePath(value, baseDirectory);
         EnsureRegularDirectory(path, key);
         return path;
     }

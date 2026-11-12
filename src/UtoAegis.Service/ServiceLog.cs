@@ -154,4 +154,10 @@ internal static partial class ServiceLog
         Level = LogLevel.Error,
         Message = "Scan history persistence failed.")]
     public static partial void HistoryFailed(ILogger logger, Exception exception);
+
+    [LoggerMessage(
+        EventId = 401,
+        Level = LogLevel.Error,
+        Message = "Security telemetry persistence failed; monitoring continues locally.")]
+    public static partial void SecurityTelemetryFailed(ILogger logger, Exception exception);
 }

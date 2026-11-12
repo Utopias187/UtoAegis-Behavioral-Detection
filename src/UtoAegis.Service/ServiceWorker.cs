@@ -11,6 +11,7 @@ using UtoAegis.Infrastructure.Monitoring;
 using UtoAegis.Infrastructure.Quarantine;
 using UtoAegis.Infrastructure.Reputation;
 using UtoAegis.Infrastructure.Signatures;
+using UtoAegis.Infrastructure.Telemetry;
 using UtoAegis.Infrastructure.ThreatIntelligence;
 
 namespace UtoAegis.Service;
@@ -26,8 +27,24 @@ internal sealed class ServiceWorker(
     {
         FileSystemQuarantineStore? quarantineStore = null;
         ServiceThreatContentReloader? contentReloader = null;
+        SecurityTelemetrySpool? telemetrySpool = null;
+        SecurityTelemetryWriter? securityTelemetry = null;
+        var monitorRunId = Guid.NewGuid().ToString("N");
         try
         {
+            if (configuration.SecurityTelemetrySpoolPath is not null)
+            {
+                telemetrySpool = new SecurityTelemetrySpool(
+                    configuration.SecurityTelemetrySpoolPath,
+                    new SecurityTelemetrySpoolOptions(
+                        configuration.TelemetryMaximumRecords));
+                await telemetrySpool.InitializeAsync(stoppingToken);
+                securityTelemetry = new SecurityTelemetryWriter(
+                    telemetrySpool,
+                    "monitor",
+                    configuration.DeploymentId!);
+            }
+
             var initialScanner = await CreateScannerAsync(
                 detectionSources.DatabasePath,
                 detectionSources.SignaturePath,
@@ -72,7 +89,8 @@ internal sealed class ServiceWorker(
                 responseEngine,
                 historyStore,
                 configuration.MonitorRoot,
-                configuration.Recursive);
+                configuration.Recursive,
+                securityTelemetry);
             var directoryScanner = new DirectoryScanner(
                 scanner,
                 new DirectoryScanOptions(
@@ -98,6 +116,19 @@ internal sealed class ServiceWorker(
                 logger,
                 configuration.MonitorRoot,
                 configuration.ResponsePolicy.Mode);
+            await TryWriteTelemetryAsync(
+                securityTelemetry,
+                "monitor.started",
+                monitorRunId,
+                new
+                {
+                    configuration.MonitorRoot,
+                    configuration.Recursive,
+                    responseMode = configuration.ResponsePolicy.Mode.ToString(),
+                    contentVersion = detectionSources.ContentVersion,
+                    contentSequence = detectionSources.ContentSequence
+                },
+                stoppingToken);
 
             var monitorTask = monitoringEngine
                 .RunAsync(configuration.MonitorRoot, eventSource, stoppingToken)
@@ -127,16 +158,29 @@ internal sealed class ServiceWorker(
                 if (contentReloader is not null && now >= nextReloadUtc)
                 {
                     var reload = await contentReloader.CheckAsync(stoppingToken);
-                    WriteReloadResult(reload, contentReloader.Scanner.Generation);
+                    await WriteReloadResultAsync(
+                        reload,
+                        contentReloader.Scanner.Generation,
+                        securityTelemetry,
+                        monitorRunId,
+                        stoppingToken);
                     nextReloadUtc = DateTimeOffset.UtcNow + configuration.ContentReloadInterval;
                 }
 
                 if (now >= nextHealthUtc)
                 {
-                    WriteHealth(sink.Snapshot());
+                    await WriteHealthAsync(
+                        sink.Snapshot(),
+                        securityTelemetry,
+                        monitorRunId,
+                        stoppingToken);
                     if (contentReloader is not null)
                     {
-                        WriteThreatContentHealth(contentReloader.Health);
+                        await WriteThreatContentHealthAsync(
+                            contentReloader.Health,
+                            securityTelemetry,
+                            monitorRunId,
+                            stoppingToken);
                     }
 
                     nextHealthUtc = DateTimeOffset.UtcNow + configuration.HealthInterval;
@@ -144,10 +188,18 @@ internal sealed class ServiceWorker(
             }
 
             var summary = await monitorTask;
-            WriteHealth(sink.Snapshot());
+            await WriteHealthAsync(
+                sink.Snapshot(),
+                securityTelemetry,
+                monitorRunId,
+                stoppingToken);
             if (contentReloader is not null)
             {
-                WriteThreatContentHealth(contentReloader.Health);
+                await WriteThreatContentHealthAsync(
+                    contentReloader.Health,
+                    securityTelemetry,
+                    monitorRunId,
+                    stoppingToken);
             }
             ServiceLog.MonitoringStopped(
                 logger,
@@ -156,6 +208,19 @@ internal sealed class ServiceWorker(
                 summary.FileScanCount,
                 summary.RecoveryScanCount,
                 summary.IssueCount);
+            await TryWriteTelemetryAsync(
+                securityTelemetry,
+                "monitor.stopped",
+                monitorRunId,
+                new
+                {
+                    elapsedMilliseconds = summary.Elapsed.TotalMilliseconds,
+                    summary.EventCount,
+                    summary.FileScanCount,
+                    summary.RecoveryScanCount,
+                    summary.IssueCount
+                },
+                stoppingToken);
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
@@ -165,6 +230,14 @@ internal sealed class ServiceWorker(
         {
             contentReloader?.Dispose();
             quarantineStore?.Dispose();
+            if (securityTelemetry is not null)
+            {
+                securityTelemetry.Dispose();
+            }
+            else
+            {
+                telemetrySpool?.Dispose();
+            }
         }
     }
 
@@ -227,7 +300,12 @@ internal sealed class ServiceWorker(
         return store;
     }
 
-    private void WriteHealth(ServiceHealthSnapshot snapshot) =>
+    private async ValueTask WriteHealthAsync(
+        ServiceHealthSnapshot snapshot,
+        SecurityTelemetryWriter? securityTelemetry,
+        string correlationId,
+        CancellationToken cancellationToken)
+    {
         ServiceLog.Health(
             logger,
             snapshot.ScannedFileCount,
@@ -236,8 +314,20 @@ internal sealed class ServiceWorker(
             snapshot.ResponseFailureCount,
             snapshot.MonitorIssueCount,
             snapshot.HistoryFailureCount);
+        await TryWriteTelemetryAsync(
+            securityTelemetry,
+            "monitor.health",
+            correlationId,
+            snapshot,
+            cancellationToken);
+    }
 
-    private void WriteReloadResult(ThreatContentReloadResult result, long generation)
+    private async ValueTask WriteReloadResultAsync(
+        ThreatContentReloadResult result,
+        long generation,
+        SecurityTelemetryWriter? securityTelemetry,
+        string correlationId,
+        CancellationToken cancellationToken)
     {
         if (result.Status == ThreatContentReloadStatus.Reloaded)
         {
@@ -258,6 +348,22 @@ internal sealed class ServiceWorker(
                     manifest.Version,
                     manifest.ExpiresUtc);
             }
+
+            await TryWriteTelemetryAsync(
+                securityTelemetry,
+                "threatContent.reloaded",
+                correlationId,
+                new
+                {
+                    previousVersion = result.Previous.Version,
+                    previousSequence = result.Previous.Sequence,
+                    manifest.Version,
+                    manifest.Sequence,
+                    generation,
+                    manifest.KeyId,
+                    manifest.ExpiresUtc
+                },
+                cancellationToken);
         }
         else if (result.Status == ThreatContentReloadStatus.Rejected && result.ShouldLog)
         {
@@ -266,10 +372,26 @@ internal sealed class ServiceWorker(
                 result.Active.Version,
                 result.Active.Sequence,
                 result.Error!);
+            await TryWriteTelemetryAsync(
+                securityTelemetry,
+                "threatContent.reloadRejected",
+                correlationId,
+                new
+                {
+                    activeVersion = result.Active.Version,
+                    activeSequence = result.Active.Sequence,
+                    reason = result.Error
+                },
+                cancellationToken);
         }
     }
 
-    private void WriteThreatContentHealth(ServiceThreatContentHealthSnapshot snapshot) =>
+    private async ValueTask WriteThreatContentHealthAsync(
+        ServiceThreatContentHealthSnapshot snapshot,
+        SecurityTelemetryWriter? securityTelemetry,
+        string correlationId,
+        CancellationToken cancellationToken)
+    {
         ServiceLog.ThreatContentHealth(
             logger,
             snapshot.Version,
@@ -278,4 +400,37 @@ internal sealed class ServiceWorker(
             snapshot.SuccessfulReloadCount,
             snapshot.RejectedReloadCount,
             snapshot.LastCheckedUtc);
+        await TryWriteTelemetryAsync(
+            securityTelemetry,
+            "threatContent.health",
+            correlationId,
+            snapshot,
+            cancellationToken);
+    }
+
+    private async ValueTask TryWriteTelemetryAsync<TPayload>(
+        SecurityTelemetryWriter? securityTelemetry,
+        string eventType,
+        string correlationId,
+        TPayload payload,
+        CancellationToken cancellationToken)
+    {
+        if (securityTelemetry is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await securityTelemetry.WriteAsync(
+                eventType,
+                correlationId,
+                payload,
+                cancellationToken);
+        }
+        catch (SecurityTelemetryException exception)
+        {
+            ServiceLog.SecurityTelemetryFailed(logger, exception);
+        }
+    }
 }

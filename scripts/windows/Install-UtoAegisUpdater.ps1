@@ -103,7 +103,14 @@ $contentStore = Resolve-ConfiguredPath ([string]$settings.ContentStorePath) $pub
 $downloadPath = Resolve-ConfiguredPath ([string]$settings.DownloadPath) $publish
 $telemetryPath = Resolve-ConfiguredPath ([string]$settings.TelemetryPath) $publish
 $telemetryDirectory = [IO.Path]::GetDirectoryName($telemetryPath)
-$writableDirectories = @($contentStore, $downloadPath, $telemetryDirectory)
+$securityTelemetrySpool = Resolve-ConfiguredPath `
+    ([string]$settings.SecurityTelemetrySpoolPath) $publish
+$writableDirectories = @(
+    $contentStore,
+    $downloadPath,
+    $telemetryDirectory,
+    $securityTelemetrySpool
+) | Where-Object { $null -ne $_ }
 foreach ($directory in $writableDirectories) {
     Assert-SafeDirectory $directory $publish
 }

@@ -1,6 +1,7 @@
 using System.Net;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using UtoAegis.Infrastructure.Telemetry;
 using UtoAegis.Infrastructure.ThreatIntelligence;
 
 namespace UtoAegis.Updater;
@@ -88,8 +89,27 @@ internal static class Program
             new RemoteThreatBundleDownloader(
                 services.GetRequiredService<HttpClient>(),
                 services.GetRequiredService<SignedThreatBundleVerifier>()));
-        builder.Services.AddSingleton(_ =>
-            new UpdaterTelemetryWriter(configuration.TelemetryPath));
+        builder.Services.AddSingleton(services =>
+        {
+            SecurityTelemetryWriter? securityWriter = null;
+            if (configuration.SecurityTelemetrySpoolPath is not null)
+            {
+                var spool = new SecurityTelemetrySpool(
+                    configuration.SecurityTelemetrySpoolPath,
+                    new SecurityTelemetrySpoolOptions(
+                        configuration.TelemetryMaximumRecords));
+                spool.InitializeAsync().AsTask().GetAwaiter().GetResult();
+                securityWriter = new SecurityTelemetryWriter(
+                    spool,
+                    "updater",
+                    configuration.DeploymentId,
+                    services.GetRequiredService<TimeProvider>());
+            }
+
+            return new UpdaterTelemetryWriter(
+                configuration.TelemetryPath,
+                securityWriter);
+        });
         builder.Services.AddSingleton<ThreatUpdaterEngine>();
         builder.Services.AddHostedService<UpdaterWorker>();
 

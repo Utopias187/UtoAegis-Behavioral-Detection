@@ -114,6 +114,8 @@ $historyPath = Resolve-ConfiguredPath ([string]$settings.HistoryPath) $publish
 $vaultPath = Resolve-ConfiguredPath ([string]$settings.VaultPath) $publish
 $signaturePath = Resolve-ConfiguredPath ([string]$settings.SignaturePath) $publish
 $contentStorePath = Resolve-ConfiguredPath ([string]$settings.ContentStorePath) $publish
+$securityTelemetrySpoolPath = Resolve-ConfiguredPath `
+    ([string]$settings.SecurityTelemetrySpoolPath) $publish
 $trustedKeyPaths = @(
     $settings.TrustedSigningKeys |
         ForEach-Object {
@@ -151,6 +153,10 @@ try {
 
     if ($null -ne $vaultPath) {
         [void]$writeDirectories.Add($vaultPath)
+    }
+
+    if ($null -ne $securityTelemetrySpoolPath) {
+        [void]$writeDirectories.Add($securityTelemetrySpoolPath)
     }
 
     foreach ($directory in $writeDirectories) {
