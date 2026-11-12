@@ -8,6 +8,8 @@ param(
     [ValidatePattern('^[A-Za-z0-9_.-]{1,80}$')]
     [string] $ServiceName = 'UtoAegisTelemetry',
 
+    [switch] $CreateMissingSourceSpools,
+
     [switch] $Start
 )
 
@@ -102,10 +104,11 @@ if (-not (Test-Path -LiteralPath $keyPath -PathType Leaf)) {
     throw "Collector authentication key not found: $keyPath"
 }
 
-foreach ($sourcePath in $sourcePaths) {
-    if (-not (Test-Path -LiteralPath $sourcePath -PathType Container)) {
-        throw "Telemetry source spool not found: $sourcePath"
-    }
+$missingSourcePaths = @($sourcePaths | Where-Object {
+    -not (Test-Path -LiteralPath $_ -PathType Container)
+})
+if ($missingSourcePaths.Count -gt 0 -and -not $CreateMissingSourceSpools) {
+    throw "Telemetry source spools are missing; create them or use -CreateMissingSourceSpools explicitly: $($missingSourcePaths -join ', ')"
 }
 
 if (-not $PSCmdlet.ShouldProcess($ServiceName, 'Install authenticated telemetry forwarder service')) {
@@ -114,6 +117,10 @@ if (-not $PSCmdlet.ShouldProcess($ServiceName, 'Install authenticated telemetry 
 
 if (-not (Test-Path -LiteralPath $statePath -PathType Container)) {
     New-Item -ItemType Directory -Path $statePath -Force | Out-Null
+}
+
+foreach ($sourcePath in $missingSourcePaths) {
+    New-Item -ItemType Directory -Path $sourcePath -Force | Out-Null
 }
 
 & $executable --validate-config
