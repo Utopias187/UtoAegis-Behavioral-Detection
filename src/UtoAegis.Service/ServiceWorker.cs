@@ -45,6 +45,31 @@ internal sealed class ServiceWorker(
                     configuration.DeploymentId!);
             }
 
+            if (configuration.AuthenticatedRuntimePolicy is not null)
+            {
+                var policy = configuration.AuthenticatedRuntimePolicy;
+                ServiceLog.RuntimePolicyLoaded(
+                    logger,
+                    policy.Manifest.PolicyId,
+                    policy.Manifest.Sequence,
+                    policy.Manifest.KeyId,
+                    policy.Manifest.ExpiresUtc,
+                    policy.ManifestSha256);
+                await TryWriteTelemetryAsync(
+                    securityTelemetry,
+                    "runtimePolicy.loaded",
+                    monitorRunId,
+                    new
+                    {
+                        policy.Manifest.PolicyId,
+                        policy.Manifest.Sequence,
+                        policy.Manifest.KeyId,
+                        policy.Manifest.ExpiresUtc,
+                        policy.ManifestSha256
+                    },
+                    stoppingToken);
+            }
+
             var initialScanner = await CreateScannerAsync(
                 detectionSources.DatabasePath,
                 detectionSources.SignaturePath,
@@ -125,6 +150,9 @@ internal sealed class ServiceWorker(
                     configuration.MonitorRoot,
                     configuration.Recursive,
                     responseMode = configuration.ResponsePolicy.Mode.ToString(),
+                    policyId = configuration.AuthenticatedRuntimePolicy?.Manifest.PolicyId,
+                    policySequence = configuration.AuthenticatedRuntimePolicy?.Manifest.Sequence,
+                    policyManifestSha256 = configuration.AuthenticatedRuntimePolicy?.ManifestSha256,
                     contentVersion = detectionSources.ContentVersion,
                     contentSequence = detectionSources.ContentSequence
                 },

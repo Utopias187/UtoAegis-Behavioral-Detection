@@ -1,5 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using UtoAegis.Core.Response;
+using UtoAegis.Core.RuntimeIntegrity;
+using UtoAegis.Infrastructure.RuntimeIntegrity;
 
 namespace UtoAegis.Service.Tests;
 
@@ -10,6 +12,9 @@ public sealed class ServiceConfigurationTests
     private string monitorRoot = null!;
     private string externalContentStore = null!;
     private string externalTelemetrySpool = null!;
+    private string externalPolicyBundle = null!;
+    private string externalPolicyState = null!;
+    private string externalPolicyKey = null!;
 
     [TestInitialize]
     public void Initialize()
@@ -21,6 +26,9 @@ public sealed class ServiceConfigurationTests
         monitorRoot = Path.Combine(testDirectory, "monitored");
         externalContentStore = testDirectory + "-content";
         externalTelemetrySpool = testDirectory + "-telemetry";
+        externalPolicyBundle = testDirectory + "-policy";
+        externalPolicyState = testDirectory + "-policy-state";
+        externalPolicyKey = testDirectory + "-policy-key.pem";
         Directory.CreateDirectory(monitorRoot);
     }
 
@@ -40,6 +48,21 @@ public sealed class ServiceConfigurationTests
         if (Directory.Exists(externalTelemetrySpool))
         {
             Directory.Delete(externalTelemetrySpool, recursive: true);
+        }
+
+        if (Directory.Exists(externalPolicyBundle))
+        {
+            Directory.Delete(externalPolicyBundle, recursive: true);
+        }
+
+        if (Directory.Exists(externalPolicyState))
+        {
+            Directory.Delete(externalPolicyState, recursive: true);
+        }
+
+        if (File.Exists(externalPolicyKey))
+        {
+            File.Delete(externalPolicyKey);
         }
     }
 
@@ -279,6 +302,96 @@ public sealed class ServiceConfigurationTests
             Path.Combine(testDirectory, "allowed"),
             result.ResponsePolicy.AllowlistedPathPrefixes[0]);
         Assert.IsTrue(result.ResponsePolicy.AllowlistedSha256.Contains(new string('a', 64)));
+    }
+
+    [TestMethod]
+    public void Load_AuthenticatedRuntimePolicy_RequiresCompleteIsolatedConfiguration()
+    {
+        Directory.CreateDirectory(externalPolicyBundle);
+        File.WriteAllText(externalPolicyKey, "test public key");
+        var incomplete = BuildConfiguration(new Dictionary<string, string?>
+        {
+            ["UtoAegis:MonitorRoot"] = monitorRoot,
+            ["UtoAegis:DatabasePath"] = "state/reputation.db",
+            ["UtoAegis:RuntimePolicy:BundlePath"] = externalPolicyBundle
+        });
+
+        Assert.ThrowsExactly<ServiceConfigurationException>(() =>
+            ServiceConfiguration.Load(incomplete, testDirectory));
+
+        var complete = BuildConfiguration(new Dictionary<string, string?>
+        {
+            ["UtoAegis:MonitorRoot"] = monitorRoot,
+            ["UtoAegis:DatabasePath"] = "state/reputation.db",
+            ["UtoAegis:RuntimePolicy:BundlePath"] = externalPolicyBundle,
+            ["UtoAegis:RuntimePolicy:StatePath"] = Path.Combine(
+                externalPolicyState,
+                "runtime-policy-state.json"),
+            ["UtoAegis:RuntimePolicy:TrustedSigningKeys:0:KeyId"] = "policy-key-1",
+            ["UtoAegis:RuntimePolicy:TrustedSigningKeys:0:PublicKeyPath"] = externalPolicyKey
+        });
+
+        var result = ServiceConfiguration.Load(complete, testDirectory);
+
+        Assert.AreEqual(externalPolicyBundle, result.RuntimePolicyBundlePath);
+        Assert.AreEqual(
+            Path.Combine(externalPolicyState, "runtime-policy-state.json"),
+            result.RuntimePolicyStatePath);
+        Assert.AreEqual(
+            externalPolicyKey,
+            result.TrustedRuntimePolicySigningKeyPaths["policy-key-1"]);
+        CollectionAssert.Contains(result.OperationalExclusions.ToArray(), externalPolicyBundle);
+    }
+
+    [TestMethod]
+    public void ApplyAuthenticatedRuntimePolicy_ReplacesLocalResponsePolicy()
+    {
+        Directory.CreateDirectory(externalPolicyBundle);
+        File.WriteAllText(externalPolicyKey, "test public key");
+        var configuration = ServiceConfiguration.Load(
+            BuildConfiguration(new Dictionary<string, string?>
+            {
+                ["UtoAegis:MonitorRoot"] = monitorRoot,
+                ["UtoAegis:DatabasePath"] = "state/reputation.db",
+                ["UtoAegis:RuntimePolicy:BundlePath"] = externalPolicyBundle,
+                ["UtoAegis:RuntimePolicy:StatePath"] = Path.Combine(
+                    externalPolicyState,
+                    "runtime-policy-state.json"),
+                ["UtoAegis:RuntimePolicy:TrustedSigningKeys:0:KeyId"] = "policy-key-1",
+                ["UtoAegis:RuntimePolicy:TrustedSigningKeys:0:PublicKeyPath"] = externalPolicyKey
+            }),
+            testDirectory);
+        var authenticatedResponse = new ResponsePolicy(
+            ResponseMode.DryRunQuarantine,
+            maxActionsPerWindow: 9,
+            rateLimitWindow: TimeSpan.FromMinutes(2));
+        var manifest = new RuntimePolicyManifest(
+            4,
+            "endpoint-policy",
+            "policy-key-1",
+            DateTimeOffset.UtcNow.AddHours(-1),
+            DateTimeOffset.UtcNow.AddDays(1),
+            authenticatedResponse,
+            [new RuntimeServicePolicy(
+                "UtoAegis",
+                Path.Combine(testDirectory, "utoaegis-service.exe"),
+                new string('a', 64),
+                @"NT SERVICE\UtoAegis",
+                RuntimeServiceStartMode.DelayedAutomatic,
+                true)],
+            [],
+            TimeSpan.FromMinutes(5),
+            2,
+            TimeSpan.FromHours(1));
+        var verified = new VerifiedRuntimePolicy(
+            manifest,
+            new string('b', 64),
+            externalPolicyBundle);
+
+        configuration.ApplyAuthenticatedRuntimePolicy(verified);
+
+        Assert.AreSame(authenticatedResponse, configuration.ResponsePolicy);
+        Assert.AreSame(verified, configuration.AuthenticatedRuntimePolicy);
     }
 
     [TestMethod]

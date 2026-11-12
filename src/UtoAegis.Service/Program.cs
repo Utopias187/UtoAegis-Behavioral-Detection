@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using UtoAegis.Infrastructure.RuntimeIntegrity;
 using UtoAegis.Infrastructure.ThreatIntelligence;
 
 namespace UtoAegis.Service;
@@ -37,6 +38,27 @@ internal static class Program
             return 2;
         }
 
+        if (configuration.RuntimePolicyBundlePath is not null)
+        {
+            try
+            {
+                var trustStore = await ThreatTrustStoreFileLoader.LoadAsync(
+                    configuration.TrustedRuntimePolicySigningKeyPaths);
+                var verifiedPolicy = await new SignedRuntimePolicyVerifier(trustStore)
+                    .VerifyAsync(configuration.RuntimePolicyBundlePath);
+                configuration.ApplyAuthenticatedRuntimePolicy(verifiedPolicy);
+                await new RuntimePolicyStateStore(configuration.RuntimePolicyStatePath!)
+                    .AcceptAsync(verifiedPolicy);
+            }
+            catch (Exception exception) when (
+                exception is RuntimePolicyException or ThreatUpdateException or
+                    ServiceConfigurationException)
+            {
+                Console.Error.WriteLine($"Runtime-policy error: {exception.Message}");
+                return 2;
+            }
+        }
+
         ServiceDetectionSources detectionSources;
         try
         {
@@ -54,7 +76,8 @@ internal static class Program
                 $"Configuration valid: monitor={configuration.MonitorRoot}; " +
                 $"response={configuration.ResponsePolicy.Mode}; " +
                 $"recursive={configuration.Recursive}; " +
-                $"content={detectionSources.ContentVersion ?? "direct"}.");
+                $"content={detectionSources.ContentVersion ?? "direct"}; " +
+                $"policy={configuration.AuthenticatedRuntimePolicy?.Manifest.PolicyId ?? "local"}.");
             detectionSources.Dispose();
             return 0;
         }

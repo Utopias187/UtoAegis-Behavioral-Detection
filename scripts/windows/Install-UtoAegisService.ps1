@@ -116,6 +116,23 @@ $signaturePath = Resolve-ConfiguredPath ([string]$settings.SignaturePath) $publi
 $contentStorePath = Resolve-ConfiguredPath ([string]$settings.ContentStorePath) $publish
 $securityTelemetrySpoolPath = Resolve-ConfiguredPath `
     ([string]$settings.SecurityTelemetrySpoolPath) $publish
+$runtimePolicy = $settings.PSObject.Properties['RuntimePolicy']?.Value
+$runtimePolicyBundlePath = $null
+$runtimePolicyStatePath = $null
+$runtimePolicyKeyPaths = @()
+if ($null -ne $runtimePolicy) {
+    $runtimePolicyBundlePath = Resolve-ConfiguredPath `
+        ([string]$runtimePolicy.BundlePath) $publish
+    $runtimePolicyStatePath = Resolve-ConfiguredPath `
+        ([string]$runtimePolicy.StatePath) $publish
+    $runtimePolicyKeyPaths = @(
+        $runtimePolicy.TrustedSigningKeys |
+            ForEach-Object {
+                Resolve-ConfiguredPath ([string]$_.PublicKeyPath) $publish
+            } |
+            Where-Object { $null -ne $_ }
+    )
+}
 $trustedKeyPaths = @(
     $settings.TrustedSigningKeys |
         ForEach-Object {
@@ -159,6 +176,10 @@ try {
         [void]$writeDirectories.Add($securityTelemetrySpoolPath)
     }
 
+    if ($null -ne $runtimePolicyStatePath) {
+        [void]$writeDirectories.Add([IO.Path]::GetDirectoryName($runtimePolicyStatePath))
+    }
+
     foreach ($directory in $writeDirectories) {
         Set-DirectoryGrant $directory $serviceIdentity 'M' -Create
     }
@@ -174,10 +195,21 @@ try {
         Set-DirectoryGrant $contentStorePath $serviceIdentity 'RX'
     }
 
+    if ($null -ne $runtimePolicyBundlePath) {
+        Set-DirectoryGrant $runtimePolicyBundlePath $serviceIdentity 'RX'
+    }
+
     foreach ($trustedKeyPath in $trustedKeyPaths) {
         & "$env:SystemRoot\System32\icacls.exe" $trustedKeyPath /grant "${serviceIdentity}:R"
         if ($LASTEXITCODE -ne 0) {
             throw "Failed to grant read access to $trustedKeyPath"
+        }
+    }
+
+    foreach ($trustedKeyPath in $runtimePolicyKeyPaths) {
+        & "$env:SystemRoot\System32\icacls.exe" $trustedKeyPath /grant "${serviceIdentity}:R"
+        if ($LASTEXITCODE -ne 0) {
+            throw "Failed to grant read access to runtime policy key $trustedKeyPath"
         }
     }
 

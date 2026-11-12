@@ -89,6 +89,18 @@ internal static partial class ServiceLog
         DateTimeOffset? lastCheckedUtc);
 
     [LoggerMessage(
+        EventId = 107,
+        Level = LogLevel.Information,
+        Message = "Loaded authenticated runtime policy {PolicyId} sequence {Sequence} using key {KeyId}; expires {ExpiresUtc}; manifest SHA-256 {ManifestSha256}.")]
+    public static partial void RuntimePolicyLoaded(
+        ILogger logger,
+        string policyId,
+        long sequence,
+        string keyId,
+        DateTimeOffset expiresUtc,
+        string manifestSha256);
+
+    [LoggerMessage(
         EventId = 200,
         Level = LogLevel.Debug,
         Message = "Scanned {Path}; completed={Completed}, detected={Detected}.")]

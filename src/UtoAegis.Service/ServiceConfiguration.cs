@@ -4,6 +4,7 @@ using UtoAegis.Core.Monitoring;
 using UtoAegis.Core.Response;
 using UtoAegis.Core.Scanning;
 using UtoAegis.Infrastructure.Monitoring;
+using UtoAegis.Infrastructure.RuntimeIntegrity;
 
 namespace UtoAegis.Service;
 
@@ -26,6 +27,9 @@ public sealed class ServiceConfiguration
         string? vaultPath,
         string? securityTelemetrySpoolPath,
         string? deploymentId,
+        string? runtimePolicyBundlePath,
+        string? runtimePolicyStatePath,
+        IReadOnlyDictionary<string, string> trustedRuntimePolicySigningKeyPaths,
         int telemetryMaximumRecords,
         int maximumConcurrency,
         int queueCapacity,
@@ -46,6 +50,9 @@ public sealed class ServiceConfiguration
         VaultPath = vaultPath;
         SecurityTelemetrySpoolPath = securityTelemetrySpoolPath;
         DeploymentId = deploymentId;
+        RuntimePolicyBundlePath = runtimePolicyBundlePath;
+        RuntimePolicyStatePath = runtimePolicyStatePath;
+        TrustedRuntimePolicySigningKeyPaths = trustedRuntimePolicySigningKeyPaths;
         TelemetryMaximumRecords = telemetryMaximumRecords;
         MaximumConcurrency = maximumConcurrency;
         QueueCapacity = queueCapacity;
@@ -78,6 +85,14 @@ public sealed class ServiceConfiguration
 
     public string? DeploymentId { get; }
 
+    public string? RuntimePolicyBundlePath { get; }
+
+    public string? RuntimePolicyStatePath { get; }
+
+    public IReadOnlyDictionary<string, string> TrustedRuntimePolicySigningKeyPaths { get; }
+
+    public VerifiedRuntimePolicy? AuthenticatedRuntimePolicy { get; private set; }
+
     public int TelemetryMaximumRecords { get; }
 
     public int MaximumConcurrency { get; }
@@ -92,7 +107,7 @@ public sealed class ServiceConfiguration
 
     public TimeSpan ContentReloadInterval { get; }
 
-    public ResponsePolicy ResponsePolicy { get; }
+    public ResponsePolicy ResponsePolicy { get; private set; }
 
     public IReadOnlyCollection<string> OperationalExclusions
     {
@@ -128,7 +143,19 @@ public sealed class ServiceConfiguration
                 paths.Add(SecurityTelemetrySpoolPath);
             }
 
+            if (RuntimePolicyBundlePath is not null)
+            {
+                paths.Add(RuntimePolicyBundlePath);
+            }
+
+            if (RuntimePolicyStatePath is not null)
+            {
+                paths.Add(RuntimePolicyStatePath);
+                paths.Add(RuntimePolicyStatePath + ".lock");
+            }
+
             paths.AddRange(TrustedSigningKeyPaths.Values);
+            paths.AddRange(TrustedRuntimePolicySigningKeyPaths.Values);
 
             return paths;
         }
@@ -160,6 +187,36 @@ public sealed class ServiceConfiguration
                 "SecurityTelemetrySpoolPath",
                 baseDirectory);
             var deploymentId = OptionalIdentifier(section, "DeploymentId");
+            var runtimePolicySection = section.GetSection("RuntimePolicy");
+            var runtimePolicyBundlePath = OptionalPath(
+                runtimePolicySection,
+                "BundlePath",
+                baseDirectory);
+            var runtimePolicyStatePath = OptionalPath(
+                runtimePolicySection,
+                "StatePath",
+                baseDirectory);
+            var trustedRuntimePolicySigningKeyPaths = ReadTrustedSigningKeys(
+                runtimePolicySection.GetSection("TrustedSigningKeys"),
+                baseDirectory);
+            var runtimePolicyConfigured = runtimePolicyBundlePath is not null ||
+                runtimePolicyStatePath is not null ||
+                trustedRuntimePolicySigningKeyPaths.Count != 0;
+            if (runtimePolicyConfigured &&
+                (runtimePolicyBundlePath is null || runtimePolicyStatePath is null ||
+                 trustedRuntimePolicySigningKeyPaths.Count == 0))
+            {
+                throw new ServiceConfigurationException(
+                    "RuntimePolicy requires BundlePath, StatePath, and at least one TrustedSigningKeys entry.");
+            }
+
+            if (runtimePolicyBundlePath is not null &&
+                (!Directory.Exists(runtimePolicyBundlePath) ||
+                 File.GetAttributes(runtimePolicyBundlePath).HasFlag(FileAttributes.ReparsePoint)))
+            {
+                throw new ServiceConfigurationException(
+                    "RuntimePolicy:BundlePath must reference an existing regular directory.");
+            }
             if (securityTelemetrySpoolPath is not null)
             {
                 if (deploymentId is null)
@@ -232,7 +289,9 @@ public sealed class ServiceConfiguration
                 contentStorePath,
                 historyPath,
                 vaultPath,
-                securityTelemetrySpoolPath);
+                securityTelemetrySpoolPath,
+                runtimePolicyBundlePath,
+                runtimePolicyStatePath);
 
             var responseSection = section.GetSection("Response");
             var mode = ParseEnum(
@@ -279,6 +338,25 @@ public sealed class ServiceConfiguration
                     : StringComparer.Ordinal)
                 .ToArray();
             var installationDirectory = Path.GetFullPath(baseDirectory);
+            if (runtimePolicyStatePath is not null)
+            {
+                var runtimePolicyStateDirectory = Path.GetDirectoryName(runtimePolicyStatePath)!;
+                if (PathEquals(runtimePolicyStateDirectory, Path.GetPathRoot(runtimePolicyStateDirectory)!) ||
+                    IsWithin(runtimePolicyStateDirectory, installationDirectory) ||
+                    IsWithin(installationDirectory, runtimePolicyStateDirectory) ||
+                    IsWithin(monitorRoot, runtimePolicyStateDirectory))
+                {
+                    throw new ServiceConfigurationException(
+                        "Runtime policy state must be outside MonitorRoot and the installation directory and not at a filesystem root.");
+                }
+
+                writableDirectories = writableDirectories
+                    .Append(runtimePolicyStateDirectory)
+                    .Distinct(OperatingSystem.IsWindows()
+                        ? StringComparer.OrdinalIgnoreCase
+                        : StringComparer.Ordinal)
+                    .ToArray();
+            }
             if (writableDirectories.Any(directory =>
                     PathEquals(directory, Path.GetPathRoot(directory)!) ||
                     IsWithin(directory, installationDirectory)))
@@ -310,6 +388,18 @@ public sealed class ServiceConfiguration
             {
                 throw new ServiceConfigurationException(
                     "Trusted signing keys must be outside the content store and writable state directories.");
+            }
+
+            if (runtimePolicyBundlePath is not null &&
+                (IsWithin(runtimePolicyBundlePath, installationDirectory) ||
+                 IsWithin(installationDirectory, runtimePolicyBundlePath) ||
+                 writableDirectories.Any(directory => IsWithin(directory, runtimePolicyBundlePath)) ||
+                 trustedRuntimePolicySigningKeyPaths.Values.Any(path =>
+                     IsWithin(runtimePolicyBundlePath, path) ||
+                     writableDirectories.Any(directory => IsWithin(directory, path)))))
+            {
+                throw new ServiceConfigurationException(
+                    "Runtime policy bundles and signing keys must be outside writable state and the installation directory.");
             }
 
             if (IsWithin(monitorRoot, installationDirectory))
@@ -389,6 +479,9 @@ public sealed class ServiceConfiguration
                 vaultPath,
                 securityTelemetrySpoolPath,
                 deploymentId,
+                runtimePolicyBundlePath,
+                runtimePolicyStatePath,
+                trustedRuntimePolicySigningKeyPaths,
                 telemetryMaximumRecords,
                 maximumConcurrency,
                 queueCapacity,
@@ -410,6 +503,32 @@ public sealed class ServiceConfiguration
                 "The UtoAegis service configuration is invalid.",
                 exception);
         }
+    }
+
+    internal void ApplyAuthenticatedRuntimePolicy(VerifiedRuntimePolicy policy)
+    {
+        ArgumentNullException.ThrowIfNull(policy);
+        if (RuntimePolicyBundlePath is null || RuntimePolicyStatePath is null)
+        {
+            throw new InvalidOperationException(
+                "Authenticated runtime policy is not configured for this service.");
+        }
+
+        if (!policy.Manifest.Services.Any(service =>
+                string.Equals(service.Name, "UtoAegis", StringComparison.Ordinal)))
+        {
+            throw new ServiceConfigurationException(
+                "The authenticated runtime policy does not contain the UtoAegis service baseline.");
+        }
+
+        if (policy.Manifest.ResponsePolicy.Mode == ResponseMode.Quarantine && VaultPath is null)
+        {
+            throw new ServiceConfigurationException(
+                "Authenticated quarantine response requires VaultPath.");
+        }
+
+        AuthenticatedRuntimePolicy = policy;
+        ResponsePolicy = policy.Manifest.ResponsePolicy;
     }
 
     private static string RequiredPath(
