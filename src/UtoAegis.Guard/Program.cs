@@ -101,7 +101,8 @@ internal static class Program
         catch (Exception exception) when (
             exception is GuardConfigurationException or RuntimePolicyException or
                 ThreatUpdateException or SecurityTelemetryException or
-                IOException or UnauthorizedAccessException or InvalidOperationException)
+                IOException or UnauthorizedAccessException or InvalidOperationException or
+                System.ComponentModel.Win32Exception or TimeoutException)
         {
             if (telemetry is not null)
             {

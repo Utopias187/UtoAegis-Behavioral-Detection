@@ -109,11 +109,22 @@ foreach ($name in @($ServiceName | Sort-Object -Unique)) {
         'Disabled' { 'Disabled' }
         default { throw "Service '$name' uses unsupported start mode '$($service.StartMode)'." }
     }
+    $account = [string]$service.StartName
+    $passwordlessAccounts = @(
+        'LocalSystem',
+        'NT AUTHORITY\SYSTEM',
+        'NT AUTHORITY\LocalService',
+        'NT AUTHORITY\NetworkService',
+        "NT SERVICE\$name")
+    if ($EnableServiceRecovery -and $account -notin $passwordlessAccounts) {
+        throw "Service '$name' uses account '$account'; automatic recovery supports only passwordless built-in or matching virtual service accounts."
+    }
+
     $services.Add([ordered]@{
         name = $name
         executablePath = $executable
         executableSha256 = (Get-FileHash -LiteralPath $executable -Algorithm SHA256).Hash.ToLowerInvariant()
-        account = [string]$service.StartName
+        account = $account
         startMode = $startMode
         recover = [bool]$EnableServiceRecovery
     })

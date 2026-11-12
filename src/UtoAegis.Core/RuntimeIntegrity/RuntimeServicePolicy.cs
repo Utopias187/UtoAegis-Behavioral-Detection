@@ -34,6 +34,13 @@ public sealed record RuntimeServicePolicy
             throw new ArgumentOutOfRangeException(nameof(startMode));
         }
 
+        if (recover && !IsPasswordlessServiceAccount(normalizedAccount, Name))
+        {
+            throw new ArgumentException(
+                "Automatic service recovery supports only passwordless built-in or matching virtual service accounts.",
+                nameof(account));
+        }
+
         ExecutableSha256 = normalizedHash!;
         Account = normalizedAccount;
         StartMode = startMode;
@@ -70,4 +77,11 @@ public sealed record RuntimeServicePolicy
 
         return normalized;
     }
+
+    private static bool IsPasswordlessServiceAccount(string account, string serviceName) =>
+        string.Equals(account, "LocalSystem", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(account, @"NT AUTHORITY\SYSTEM", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(account, @"NT AUTHORITY\LocalService", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(account, @"NT AUTHORITY\NetworkService", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(account, @"NT SERVICE\" + serviceName, StringComparison.OrdinalIgnoreCase);
 }
