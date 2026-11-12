@@ -1368,3 +1368,112 @@ built-in certificate pinning or mutual TLS.
 Harden production release and upgrade operations with signed distributable
 artifacts, software bills of materials, reproducible release metadata, verified
 upgrade and rollback workflows, and explicit Windows service recovery testing.
+
+## 2026-11-12 — Milestone 13: signed releases and deployment hardening
+
+### Goal
+
+Turn locked, tested source into a reviewable Windows release candidate whose
+contents, origin, dependencies, and upgrade path can be verified before any
+service is changed. Make a failed multi-service upgrade recover the prior
+service paths and running states instead of leaving a mixed deployment.
+
+### Release trust and artifact design
+
+- Added a dual-architecture release builder for `win-x64` and `win-arm64` that
+  performs locked restore, the complete test suite, self-contained publishing,
+  release verification, deterministic archive construction, and transport
+  checksum generation.
+- Added a CycloneDX 1.7 SBOM generator derived from the six committed production
+  lock files. It records package hashes, direct and transitive use, project
+  consumers, and the dependency graph while rejecting inconsistent lock data.
+- Added a sorted manifest of every packaged relative path, byte length, and
+  SHA-256 digest. Verification rejects missing, extra, duplicate, rooted,
+  traversing, or reparse-point content before deployment.
+- Added Authenticode signing for UtoAegis-owned executables and assemblies with
+  SHA-256 and RFC 3161 timestamps. Third-party assemblies retain their original
+  publisher bytes and are covered by the signed manifest.
+- Added a detached CMS signature for the complete release manifest. Production
+  verification requires a cryptographically valid signature from an explicitly
+  allowed certificate thumbprint and valid Authenticode on UtoAegis binaries.
+- Kept unsigned development candidates behind an explicit creation and
+  verification override. The production path fails closed when signing evidence
+  or the signer allowlist is absent.
+- Added locked runtime graphs to all six production projects so both target
+  architectures can be restored and published without changing dependencies.
+
+### Transactional deployment and recovery
+
+- Added side-effect-free upgrade planning that reports the current service
+  paths, proposed paths, running states, and retained versions as JSON.
+- Added versioned staging, configuration preservation, staged executable and
+  configuration validation, bounded semantic-version retention, and atomic
+  deployment-state replacement.
+- Service path changes are treated as one transaction. Any stop, switch, or
+  restart failure restores the previous paths and running states; the target is
+  retained if rollback itself cannot be completed.
+- Added explicit rollback to the prior recorded paths without lowering threat
+  content anti-rollback floors or altering quarantine, databases, or telemetry
+  checkpoints.
+- Added an opt-in, administrator-only recovery test that proves each selected
+  service restarts in a distinct process within the configured timeout.
+
+### Protected release workflow
+
+- Added a manual-only GitHub Actions workflow bound to the `release-signing`
+  environment and pinned third-party actions.
+- The workflow imports a PFX without making the private key exportable, verifies
+  its expected thumbprint, signs and verifies both Windows architectures,
+  uploads all evidence, creates only a draft GitHub release, and removes the
+  certificate in its cleanup step.
+- Signing credentials remain environment secrets, publication remains a human
+  review decision, and concurrent runs for one version cannot cancel a release
+  that may already have used the key.
+
+### Verification
+
+- Locked restore completed for all 12 projects and all 12 NuGet lock files.
+- The Release build completed with zero warnings and zero errors, and formatter
+  verification completed without changes.
+- All 265 .NET tests passed: 101 core, 83 infrastructure, 39 CLI, 23 monitoring
+  service, 12 updater, and 7 telemetry tests.
+- Both PowerShell integration suites passed. They cover release inventory and
+  tamper rejection plus a verified, side-effect-free deployment plan.
+- All 23 PowerShell scripts parsed successfully, and the unfinished-work marker
+  scan was clean. The 15 C# comment lines remain the five short XML
+  documentation blocks retained by the prior comment audit.
+- The official CycloneDX 1.7 JSON schema accepted the generated 37-component
+  SBOM.
+- All 12 projects reported no known vulnerable direct or transitive NuGet
+  packages against the current NuGet advisory index.
+- Locked publishing was exercised for both `win-x64` and `win-arm64`, and an
+  extracted unsigned development archive passed complete inventory and SBOM
+  verification.
+
+### Trust limits
+
+A production Authenticode and CMS run still requires a trusted code-signing
+certificate; no suitable private key is installed in the development
+environment, so only the deliberately unsigned development path can be executed
+locally. The workflow's PFX option is less resistant to key extraction than an
+HSM or managed signing service. Live Service Control Manager switching and the
+deliberately disruptive restart test require a controlled, elevated Windows
+host and are not run by CI. The release is a ZIP rather than an MSI or MSIX.
+
+### Definition of done
+
+- [x] Both Windows architectures publish from committed locked dependency graphs.
+- [x] Every packaged byte is inventoried and the dependency graph has an SBOM.
+- [x] Production artifacts require pinned CMS and Authenticode signing evidence.
+- [x] Unsigned development output is explicit and rejected by production checks.
+- [x] Upgrade planning is verifiable without changing the installation.
+- [x] Multi-service upgrades roll back prior paths and running states on failure.
+- [x] Operators can explicitly restore the prior recorded deployment.
+- [x] Controlled recovery testing proves service process replacement.
+- [x] GitHub produces reviewable draft releases through a protected environment.
+
+### Next milestone
+
+Protect endpoint runtime policy and installation state: authenticate policy
+bundles, detect service configuration and ACL drift, emit tamper telemetry, and
+add bounded automated recovery without granting services broader privileges.

@@ -121,6 +121,10 @@ Build and activate the initial signed content before validating or installing
 the service. The complete workflow and bundle schema are in the
 [authenticated update guide](authenticated-threat-updates.md).
 
+Production binary releases, preflight verification, transactional upgrades,
+rollback, and controlled restart testing are documented in the
+[signed release guide](signed-releases-and-upgrades.md).
+
 The principal bounds are:
 
 | Setting | Accepted range |

@@ -16,7 +16,9 @@ bounded, tamper-evident telemetry chains; an independently privileged forwarder
 delivers them to an authenticated HTTPS collector using durable checkpoints.
 UtoAegis does not execute scanned files, and the monitoring service defaults to
 observe-only behavior. The monitor reverifies and atomically adopts newly active
-content without a service restart.
+content without a service restart. Release tooling produces locked,
+dual-architecture bundles with a CycloneDX SBOM, exact integrity inventory,
+production signing boundary, and transactional upgrade or rollback workflow.
 
 Implementation decisions and verification notes are recorded in the
 [development journal](docs/development-journal.md).
@@ -26,6 +28,8 @@ Live detector replacement is documented in the
 [live reload guide](docs/live-threat-content-reloading.md).
 Telemetry deployment and collector integration are documented in the
 [security telemetry guide](docs/security-telemetry.md).
+Release signing, verification, and upgrades are documented in the
+[signed release guide](docs/signed-releases-and-upgrades.md).
 
 ## Current architecture
 
@@ -71,6 +75,9 @@ read-only monitor -> poll pointer -> reverify -> atomic detector generation swap
 monitor + updater -> separate bounded hash chains -> read-only forwarder
                                                     |-> HMAC-authenticated HTTPS
                                                     |-> exact ack -> checkpoint
+locked source -> dual-architecture publish -> SBOM + exact file inventory
+                                      |-> Authenticode + detached CMS signature
+                                      |-> staged validation -> switch / rollback
 ```
 
 `Unknown` means only that the digest is absent from the configured database. It
@@ -628,9 +635,23 @@ a clean-file verdict.
 - [x] Added least-privilege publish, install, status, and removal workflows.
 - [x] Added tamper, pruning, authentication, acknowledgement, and retry tests.
 
-The next milestone should harden production releases with signed artifacts,
-software bills of materials, reproducible release metadata, verified upgrade and
-rollback workflows, and explicit Windows service recovery testing.
+### Milestone 13 — Signed releases and deployment hardening
+
+- [x] Bound `win-x64` and `win-arm64` publishing to committed NuGet lock graphs.
+- [x] Added a CycloneDX 1.7 SBOM derived from production dependency locks.
+- [x] Added a strict path, length, and SHA-256 release inventory.
+- [x] Added SHA-256 Authenticode and RFC 3161 timestamping for owned binaries.
+- [x] Added a detached CMS signature covering the complete release inventory.
+- [x] Required explicit signer-thumbprint allowlisting during verification.
+- [x] Added deterministic ZIP construction and an adjacent archive checksum.
+- [x] Added side-effect-free upgrade planning and staged configuration checks.
+- [x] Added transactional SCM switching with automatic failure rollback.
+- [x] Added bounded version retention, explicit rollback, and recovery testing.
+- [x] Added a manual environment-scoped workflow that creates draft releases.
+
+The next milestone should protect endpoint policy and service integrity with
+authenticated policy bundles, ACL-drift detection, service-tamper telemetry,
+and a bounded recovery path for unauthorized configuration changes.
 
 ## Ownership and license
 
