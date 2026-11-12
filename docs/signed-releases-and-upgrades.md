@@ -19,6 +19,7 @@ UtoAegis-<version>-<runtime>\
     updater\
     telemetry\
   tools\
+    guard\
   deployment\
     windows\
     Install-UtoAegisRelease.ps1

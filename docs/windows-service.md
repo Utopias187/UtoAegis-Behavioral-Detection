@@ -125,6 +125,10 @@ Production binary releases, preflight verification, transactional upgrades,
 rollback, and controlled restart testing are documented in the
 [signed release guide](signed-releases-and-upgrades.md).
 
+Authenticated response policy, SCM and ACL drift auditing, Guard telemetry, and
+bounded recovery are documented in the
+[runtime integrity guide](authenticated-runtime-policy-and-integrity-guard.md).
+
 The principal bounds are:
 
 | Setting | Accepted range |

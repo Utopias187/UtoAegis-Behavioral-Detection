@@ -1,7 +1,7 @@
 # Security Telemetry
 
 Milestone 12 adds bounded, tamper-evident telemetry without giving the endpoint
-monitor or threat-content updater a collector credential. Each producer writes
+monitor, threat-content updater, or integrity Guard a collector credential. Each producer writes
 only to its own local spool. A separately privileged .NET 10 Windows service
 verifies those chains and forwards bounded batches over authenticated HTTPS.
 
@@ -19,6 +19,9 @@ NT SERVICE\UtoAegis                 NT SERVICE\UtoAegisUpdater
   modify monitor spool only           modify updater spool only
            |                                      |
            +---------- read-only spools ----------+
+SYSTEM scheduled integrity Guard                  |
+  SCM, executable, and ACL audit                   |
+  modify Guard spool only -------------------------+
                               |
                   NT SERVICE\UtoAegisTelemetry
                     read producer spools
@@ -58,6 +61,13 @@ content-reload results, and content health. Detection and response records share
 the scan correlation identifier. The updater mirrors its check, retry,
 activation, rejection, transport, and retention events while preserving its
 existing local JSON Lines operations log.
+
+The one-shot integrity Guard uses its own configuration and spool, normally
+`C:\ProgramData\UtoAegisGuard\SecurityTelemetry`, with source name `guard`. It
+records authenticated policy identity, service/executable/ACL findings, bounded
+recovery decisions, rate limiting, and failures. Guard deployment and event
+semantics are detailed in the
+[runtime integrity guide](authenticated-runtime-policy-and-integrity-guard.md).
 
 ## Record and retention model
 

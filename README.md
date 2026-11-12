@@ -19,6 +19,10 @@ observe-only behavior. The monitor reverifies and atomically adopts newly active
 content without a service restart. Release tooling produces locked,
 dual-architecture bundles with a CycloneDX SBOM, exact integrity inventory,
 production signing boundary, and transactional upgrade or rollback workflow.
+Authenticated runtime-policy bundles bind response behavior, protected service
+configuration, executable hashes, and selected ACLs. A separate scheduled Guard
+audits those values, emits tamper telemetry, and performs only explicitly signed,
+rate-limited repairs.
 
 Implementation decisions and verification notes are recorded in the
 [development journal](docs/development-journal.md).
@@ -30,6 +34,8 @@ Telemetry deployment and collector integration are documented in the
 [security telemetry guide](docs/security-telemetry.md).
 Release signing, verification, and upgrades are documented in the
 [signed release guide](docs/signed-releases-and-upgrades.md).
+Runtime policy creation, Guard deployment, drift handling, and recovery are in
+the [runtime integrity guide](docs/authenticated-runtime-policy-and-integrity-guard.md).
 
 ## Current architecture
 
@@ -52,6 +58,10 @@ Release signing, verification, and upgrades are documented in the
   producer spools and a collector authentication key. It verifies each retained
   chain, signs bounded HTTPS batches, and advances per-source checkpoints only
   after an exact collector acknowledgement.
+- `UtoAegis.Guard` is a one-shot Windows integrity auditor intended for a
+  protected SYSTEM scheduled task. It verifies authenticated policy, audits SCM
+  configuration, executable hashes, and owner/group/DACL state, and applies only
+  bounded policy-authorized repair.
 
 ```text
 directory -> bounded traversal -> regular file paths -|
@@ -78,6 +88,10 @@ monitor + updater -> separate bounded hash chains -> read-only forwarder
 locked source -> dual-architecture publish -> SBOM + exact file inventory
                                       |-> Authenticode + detached CMS signature
                                       |-> staged validation -> switch / rollback
+offline policy signer -> exact signed runtime policy -> monitor response rules
+                                             |-> SYSTEM scheduled integrity Guard
+                                             |-> SCM + executable + ACL audit
+                                             |-> bounded recovery + guard telemetry
 ```
 
 `Unknown` means only that the digest is absent from the configured database. It
@@ -649,9 +663,24 @@ a clean-file verdict.
 - [x] Added bounded version retention, explicit rollback, and recovery testing.
 - [x] Added a manual environment-scoped workflow that creates draft releases.
 
-The next milestone should protect endpoint policy and service integrity with
-authenticated policy bundles, ACL-drift detection, service-tamper telemetry,
-and a bounded recovery path for unauthorized configuration changes.
+### Milestone 14 — Authenticated runtime policy and integrity guard
+
+- [x] Added strict ECDSA P-256 runtime-policy bundles and public-key trust.
+- [x] Persisted sequence and manifest-hash state to reject rollback and equivocation.
+- [x] Replaced locally editable monitor response rules with authenticated policy.
+- [x] Added SCM path, account, start-mode, and executable-hash auditing.
+- [x] Added owner, group, and DACL drift detection for protected paths.
+- [x] Isolated privileged auditing and repair in a one-shot scheduled Guard.
+- [x] Required both signed authorization and explicit installation opt-in for repair.
+- [x] Bounded recovery attempts with persistent, fail-closed state.
+- [x] Restarted previously running services after authenticated SCM correction.
+- [x] Added an independent Guard telemetry chain and forwarder source.
+- [x] Added baseline export, offline signing, install, status, and removal workflows.
+- [x] Added policy tamper, expiry, rollback, recovery, and rate-limit tests.
+
+The next milestone should add authenticated endpoint enrollment and policy
+distribution with device identity, staged rollout rings, revocation, and
+fleet-visible policy/health acknowledgement without moving signing keys online.
 
 ## Ownership and license
 
