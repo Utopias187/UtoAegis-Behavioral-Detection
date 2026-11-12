@@ -64,5 +64,9 @@ jobs:
             throw "One or more PowerShell scripts failed to parse."
           }
 
+      - name: Test release metadata integrity
+        shell: pwsh
+        run: ./tests/release/ReleaseMetadata.Tests.ps1
+
       - name: Report vulnerable dependencies
         run: dotnet list UtoAegis.slnx package --vulnerable --include-transitive --no-restore
