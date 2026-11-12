@@ -1,0 +1,147 @@
+name: Signed release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Semantic release version without a v prefix
+        required: true
+        type: string
+      timestamp_server:
+        description: RFC 3161 HTTPS timestamp server
+        required: true
+        default: https://timestamp.digicert.com
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: signed-release-${{ inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  build-sign-and-draft:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    environment: release-signing
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "true"
+    steps:
+      - name: Check out exact source revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: "**/packages.lock.json"
+
+      - name: Import ephemeral signing certificate
+        id: signing-certificate
+        shell: pwsh
+        env:
+          CERTIFICATE_BASE64: ${{ secrets.UTOAEGIS_SIGNING_CERTIFICATE_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.UTOAEGIS_SIGNING_CERTIFICATE_PASSWORD }}
+          EXPECTED_THUMBPRINT: ${{ secrets.UTOAEGIS_SIGNING_CERTIFICATE_THUMBPRINT }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:CERTIFICATE_BASE64) -or
+              [string]::IsNullOrWhiteSpace($env:CERTIFICATE_PASSWORD) -or
+              [string]::IsNullOrWhiteSpace($env:EXPECTED_THUMBPRINT)) {
+            throw 'The release-signing environment is missing a required signing secret.'
+          }
+
+          $pfxPath = Join-Path $env:RUNNER_TEMP 'utoaegis-signing.pfx'
+          [IO.File]::WriteAllBytes(
+            $pfxPath,
+            [Convert]::FromBase64String($env:CERTIFICATE_BASE64))
+          try {
+            $password = ConvertTo-SecureString $env:CERTIFICATE_PASSWORD -AsPlainText -Force
+            $certificate = Import-PfxCertificate `
+              -FilePath $pfxPath `
+              -CertStoreLocation Cert:\CurrentUser\My `
+              -Password $password
+            $expected = $env:EXPECTED_THUMBPRINT.Replace(' ', '').ToUpperInvariant()
+            if ($certificate.Thumbprint -cne $expected -or -not $certificate.HasPrivateKey) {
+              throw 'The imported signing certificate did not match the expected thumbprint.'
+            }
+
+            "SIGNING_CERTIFICATE_THUMBPRINT=$expected" >> $env:GITHUB_ENV
+          } finally {
+            Remove-Item -LiteralPath $pfxPath -Force -ErrorAction SilentlyContinue
+          }
+
+      - name: Build, sign, and verify release
+        shell: pwsh
+        run: |
+          foreach ($runtime in @('win-x64', 'win-arm64')) {
+            ./scripts/release/New-UtoAegisRelease.ps1 `
+              -Version '${{ inputs.version }}' `
+              -RuntimeIdentifier $runtime `
+              -TimestampServer '${{ inputs.timestamp_server }}' `
+              -CertificateThumbprint $env:SIGNING_CERTIFICATE_THUMBPRINT `
+              -OutputDirectory release-output
+
+            $package = "UtoAegis-${{ inputs.version }}-$runtime"
+            Copy-Item `
+              "release-output/$package/sbom.cdx.json" `
+              "release-output/$package.sbom.cdx.json"
+            Copy-Item `
+              "release-output/$package/release-manifest.json" `
+              "release-output/$package.release-manifest.json"
+            Copy-Item `
+              "release-output/$package/release-manifest.p7s" `
+              "release-output/$package.release-manifest.p7s"
+          }
+
+      - name: Upload verified release evidence
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: UtoAegis-${{ inputs.version }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            release-output/*.zip
+            release-output/*.SHA256SUMS
+            release-output/*.sbom.cdx.json
+            release-output/*.release-manifest.json
+            release-output/*.release-manifest.p7s
+
+      - name: Create draft GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $assets = @(
+            Get-ChildItem -LiteralPath release-output -File |
+              Where-Object {
+                $_.Name -match '\.(zip|SHA256SUMS|sbom\.cdx\.json|release-manifest\.json|release-manifest\.p7s)$'
+              } |
+              Sort-Object Name |
+              Select-Object -ExpandProperty FullName
+          )
+          if ($assets.Count -ne 10) {
+            throw "Expected 10 release assets but found $($assets.Count)."
+          }
+
+          gh release create "v${{ inputs.version }}" `
+            --draft `
+            --generate-notes `
+            --target $env:GITHUB_SHA `
+            --title "UtoAegis ${{ inputs.version }}" `
+            @assets
+
+      - name: Remove signing certificate
+        if: always() && steps.signing-certificate.outcome == 'success'
+        shell: pwsh
+        run: |
+          if (-not [string]::IsNullOrWhiteSpace($env:SIGNING_CERTIFICATE_THUMBPRINT)) {
+            Remove-Item `
+              -LiteralPath "Cert:\CurrentUser\My\$env:SIGNING_CERTIFICATE_THUMBPRINT" `
+              -Force `
+              -ErrorAction SilentlyContinue
+          }
