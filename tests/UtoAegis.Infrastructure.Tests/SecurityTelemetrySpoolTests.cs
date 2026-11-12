@@ -81,6 +81,41 @@ public sealed class SecurityTelemetrySpoolTests
     }
 
     [TestMethod]
+    public async Task InitializeAsync_PreAnchorRecordLeftByInterruptedPrune_IsIgnored()
+    {
+        var root = Path.Combine(_testDirectory, "spool");
+        string prunedRecord;
+        using (var spool = new SecurityTelemetrySpool(
+                   root,
+                   new SecurityTelemetrySpoolOptions(maximumRecords: 2)))
+        {
+            await spool.AppendAsync(CreateEvent("health", "one"));
+            var firstPath = Path.Combine(root, "records", "00000000000000000001.json");
+            prunedRecord = await File.ReadAllTextAsync(firstPath);
+            await spool.AppendAsync(CreateEvent("health", "two"));
+            await spool.AppendAsync(CreateEvent("health", "three"));
+        }
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "records", "00000000000000000001.json"),
+            prunedRecord);
+        using var reopened = new SecurityTelemetrySpool(
+            root,
+            new SecurityTelemetrySpoolOptions(maximumRecords: 2));
+        using var prunedDocument = JsonDocument.Parse(prunedRecord);
+
+        await reopened.InitializeAsync();
+        var records = await reopened.ReadBatchAsync(
+            new SecurityTelemetryCheckpoint(1, prunedDocument
+                .RootElement.GetProperty("hash").GetString()!),
+            10);
+
+        Assert.HasCount(2, records);
+        Assert.AreEqual(2L, records[0].Sequence);
+        Assert.AreEqual(3L, records[1].Sequence);
+    }
+
+    [TestMethod]
     public async Task CheckpointStore_BackwardSave_IsRejected()
     {
         using var store = new SecurityTelemetryCheckpointStore(

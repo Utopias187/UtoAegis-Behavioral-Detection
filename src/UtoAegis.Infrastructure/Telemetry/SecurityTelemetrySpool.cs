@@ -179,8 +179,7 @@ public sealed class SecurityTelemetrySpool : IDisposable
         SpoolState state,
         CancellationToken cancellationToken)
     {
-        var paths = Directory.EnumerateFiles(_recordsPath, "*.json")
-            .OrderBy(path => path, StringComparer.Ordinal)
+        var paths = GetRetainedRecordPaths(state)
             .ToArray();
         if (paths.Length > _options.MaximumRecords)
         {
@@ -233,8 +232,7 @@ public sealed class SecurityTelemetrySpool : IDisposable
 
     private async ValueTask PruneAsync(SpoolState state, CancellationToken cancellationToken)
     {
-        var paths = Directory.EnumerateFiles(_recordsPath, "*.json")
-            .OrderBy(path => path, StringComparer.Ordinal)
+        var paths = GetRetainedRecordPaths(state)
             .ToArray();
         var removeCount = paths.Length - _options.MaximumRecords;
         if (removeCount <= 0)
@@ -311,6 +309,27 @@ public sealed class SecurityTelemetrySpool : IDisposable
 
     private string GetRecordPath(long sequence) =>
         Path.Combine(_recordsPath, $"{sequence:D20}.json");
+
+    private IEnumerable<string> GetRetainedRecordPaths(SpoolState state)
+    {
+        foreach (var path in Directory.EnumerateFiles(_recordsPath, "*.json")
+                     .OrderBy(path => path, StringComparer.Ordinal))
+        {
+            var fileName = Path.GetFileNameWithoutExtension(path);
+            if (!long.TryParse(fileName, out var sequence) ||
+                sequence < 1 ||
+                !string.Equals(fileName, $"{sequence:D20}", StringComparison.Ordinal))
+            {
+                throw new SecurityTelemetryException(
+                    "A telemetry spool entry has an invalid sequence name.");
+            }
+
+            if (sequence > state.PrunedThroughSequence)
+            {
+                yield return path;
+            }
+        }
+    }
 
     private static string ComputeHash(SecurityTelemetryEnvelope envelope) =>
         ComputeHash(new HashMaterial(
