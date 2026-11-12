@@ -47,6 +47,8 @@ directories, then install it. A representative configuration is:
     "ContentStorePath": "C:\\ProgramData\\UtoAegis\\Content",
     "DownloadPath": "C:\\ProgramData\\UtoAegisUpdater\\Downloads",
     "TelemetryPath": "C:\\ProgramData\\UtoAegisUpdater\\Telemetry\\updates.jsonl",
+    "SecurityTelemetrySpoolPath": "C:\\ProgramData\\UtoAegisUpdater\\SecurityTelemetry",
+    "TelemetryMaximumRecords": 10000,
     "DeploymentId": "endpoint-001",
     "RolloutRing": "pilot",
     "PollIntervalSeconds": 3600,
@@ -84,6 +86,7 @@ every updater-writable directory.
 | `PollIntervalSeconds` | 60–86,400 |
 | `RequestTimeoutSeconds` | 5–600 |
 | `MaximumRetainedVersions` | 2–64 |
+| `TelemetryMaximumRecords` | 1–1,000,000 |
 | `Retry:MaximumAttempts` | 1–10 |
 | `Retry:InitialDelaySeconds` | 1–300 |
 | `Retry:MaximumDelaySeconds` | initial delay–3,600 |
@@ -145,11 +148,18 @@ candidate version, event, and a non-secret message. Events distinguish checks,
 scheduled retries, current content, activation, rejection, transport failure,
 retention failure, and retention deferred by an in-flight scanner lease.
 
-Telemetry is local and is not uploaded by UtoAegis. Forward the file with the
-organization's existing log collector. Use a different fixed channel URI per
-rollout ring, promote the same signed sequence from pilot to broader rings, and
-compare activation/rejection rates before promotion. Do not put access tokens,
-user names, or host secrets in deployment or ring identifiers.
+When `SecurityTelemetrySpoolPath` is configured, the updater also mirrors each
+rollout event into its own bounded SHA-256 hash chain. `DeploymentId` identifies
+the endpoint and `TelemetryMaximumRecords` accepts 1 through 1,000,000. The
+legacy JSON Lines file remains available for local operations. The updater has
+no collector credential; the separately privileged telemetry service reads the
+spool and owns authenticated remote delivery. See the
+[security telemetry guide](security-telemetry.md).
+
+Use a different fixed channel URI per rollout ring, promote the same signed
+sequence from pilot to broader rings, and compare activation/rejection rates
+before promotion. Do not put access tokens, user names, or host secrets in
+deployment or ring identifiers.
 
 ## Retention and recovery
 
@@ -195,7 +205,8 @@ of the same incident procedure.
 
 - Monitor trust-key changes still require a controlled restart even though
   content generations now reload without one.
-- Rollout telemetry is local JSON Lines, not a remote delivery service or SLA.
+- Telemetry delivery is best-effort and bounded, not a remote-delivery SLA; a
+  prolonged outage can produce an explicit gap when the local spool prunes.
 - Key status is protected by host configuration controls, not a remotely signed
   root-metadata format.
 - The updater supports system-trusted server certificates but not built-in

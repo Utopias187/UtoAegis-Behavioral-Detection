@@ -1269,3 +1269,102 @@ initial content loading was correctly read-only.
   that explain public scanner and reload contracts.
 - Added no narrative implementation comments; names, types, and tests remain
   the primary code documentation.
+
+## 2026-11-11 — Milestone 12: tamper-evident security telemetry
+
+### Goal
+
+Make endpoint detections, response decisions, monitor health, content reloads,
+and updater rollout events remotely observable without giving the monitor or
+updater network credentials. Bound endpoint storage and make modification,
+deletion, reordering, stale delivery state, and retention gaps explicit.
+
+### Architecture and security decisions
+
+- Added a storage-neutral security event contract and infrastructure-backed
+  producer spools with canonical schema-versioned envelopes.
+- Assigned every producer a monotonically increasing sequence and chained each
+  record to the prior SHA-256 hash. Startup revalidates every retained record,
+  the pruning anchor, and the committed chain head.
+- Stored one event per bounded file and used atomic replacement for spool state
+  and collector checkpoints. Checkpoints cannot move backward.
+- Bounded producer spools by record count and record size. Pruning commits an
+  anchor before removing old records so an interrupted deletion can be safely
+  resumed; a collector behind that anchor receives an explicit gap error.
+- Kept monitor and updater spools independent. They write locally but receive
+  no collector key and perform no telemetry network requests.
+- Added `UtoAegis.Telemetry`, a separate Windows worker with read-only access to
+  producer spools, read access to an endpoint HMAC key, modify access only to
+  checkpoint state, and HTTPS egress to one configured collector URI.
+- Signed the exact method, escaped path and query, Unix timestamp, random nonce,
+  and SHA-256 body digest with HMAC-SHA256. Redirects, cookies, and transparent
+  response decompression remain disabled and certificate revocation is checked.
+- Advanced a source checkpoint only after the collector returned the exact
+  sequence and hash of the final record. Mismatched, partial, malformed, or
+  failed responses leave the batch eligible for idempotent retry.
+- Documented collector-side timestamp windows, nonce replay protection,
+  constant-time HMAC comparison, durable anchors, and source authorization.
+
+### Product integration
+
+- The monitoring service emits lifecycle, periodic health, detection, response,
+  content-reload, reload-rejection, and content-health records. A detection and
+  its response decision share the scan correlation identifier.
+- The updater preserves its bounded JSON Lines operations log and mirrors each
+  rollout event to its independent tamper-evident spool.
+- Added publish, validate, install, status, and recoverable removal workflows for
+  the forwarding service. Installers create least-privilege spool grants for all
+  three service identities.
+- Added a deployment and collector integration guide covering the wire protocol,
+  retention behavior, key provisioning, incident handling, and trust limits.
+
+### Corrections found during review
+
+The initial pruning path committed its new anchor before deleting old records,
+which is the correct durable order, but startup still treated a pre-anchor file
+left by an interruption as part of the retained chain. Startup and later pruning
+now validate record names while ignoring only correctly named records already
+covered by the committed anchor. Records at or after the anchor still fail
+closed on any missing, modified, or reordered data. A regression test recreates
+the interruption window.
+
+### Trust limits
+
+Hash chaining provides evidence relative to the collector's last accepted
+anchor; it does not prevent a local administrator from stopping services or
+deleting endpoint data. Bounded storage can intentionally create a visible gap
+during a prolonged outage. HMAC key changes currently require a controlled
+forwarder restart, and the system uses operating-system TLS trust rather than
+built-in certificate pinning or mutual TLS.
+
+### Verification
+
+- Locked restore completed for all 12 projects and all 12 NuGet lock files.
+- The Release build completed with zero warnings and zero errors.
+- Formatter verification completed without changes.
+- All 265 tests passed: 101 core, 83 infrastructure, 39 CLI, 23 monitoring
+  service, 12 updater, and 7 telemetry tests.
+- All 13 PowerShell deployment scripts parsed successfully.
+- All 12 projects reported no known vulnerable direct or transitive NuGet
+  packages against the current NuGet advisory index.
+- The unfinished-work marker scan was clean. The 15 C# comment lines remain the
+  same five short XML documentation blocks retained by the prior comment audit.
+
+### Definition of done
+
+- [x] Monitor and updater events use separate bounded local chains.
+- [x] Retained chains and pruning anchors are verified before delivery.
+- [x] Stale or mismatched checkpoints and retention gaps fail explicitly.
+- [x] The network credential is isolated in a separate forwarding service.
+- [x] Batches require HTTPS, replay-resistant HMAC authentication, and exact
+  acknowledgements.
+- [x] Checkpoints advance atomically only after collector acceptance.
+- [x] Windows deployment preserves the intended privilege boundaries.
+- [x] Tampering, pruning recovery, authentication, acknowledgement, and retry
+  behavior are covered by automated tests.
+
+### Next milestone
+
+Harden production release and upgrade operations with signed distributable
+artifacts, software bills of materials, reproducible release metadata, verified
+upgrade and rollback workflows, and explicit Windows service recovery testing.

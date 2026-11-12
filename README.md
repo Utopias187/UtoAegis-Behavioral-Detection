@@ -11,9 +11,12 @@ an explicit response policy. Authenticated threat bundles add signed, staged,
 rollback-protected updates for both reputation and signature content. UtoAegis
 also includes a separately privileged Windows updater that retrieves those
 bundles over a bounded HTTPS channel, retries transient failures, records rollout
-telemetry, and limits retained versions. UtoAegis does not execute scanned files,
-and the monitoring service defaults to observe-only behavior. The monitor now
-reverifies and atomically adopts newly active content without a service restart.
+telemetry, and limits retained versions. The monitor and updater write separate,
+bounded, tamper-evident telemetry chains; an independently privileged forwarder
+delivers them to an authenticated HTTPS collector using durable checkpoints.
+UtoAegis does not execute scanned files, and the monitoring service defaults to
+observe-only behavior. The monitor reverifies and atomically adopts newly active
+content without a service restart.
 
 Implementation decisions and verification notes are recorded in the
 [development journal](docs/development-journal.md).
@@ -21,6 +24,8 @@ Deployment and trust operations for unattended updates are in the
 [production updater guide](docs/production-threat-updater.md).
 Live detector replacement is documented in the
 [live reload guide](docs/live-threat-content-reloading.md).
+Telemetry deployment and collector integration are documented in the
+[security telemetry guide](docs/security-telemetry.md).
 
 ## Current architecture
 
@@ -39,6 +44,10 @@ Live detector replacement is documented in the
 - `UtoAegis.Updater` is a separate Windows worker with write access to managed
   content. It performs HTTPS retrieval, authenticated activation, retention,
   retry/backoff, key-policy enforcement, and local rollout telemetry.
+- `UtoAegis.Telemetry` is a separate Windows worker with read-only access to
+  producer spools and a collector authentication key. It verifies each retained
+  chain, signs bounded HTTPS batches, and advances per-source checkpoints only
+  after an exact collector acknowledgement.
 
 ```text
 directory -> bounded traversal -> regular file paths -|
@@ -59,6 +68,9 @@ ring-specific HTTPS channel -> privileged updater -> verified content store
                                       |-> retry/backoff + retention + telemetry
 read-only monitor -> poll pointer -> reverify -> atomic detector generation swap
                                   | failure -> retain last-known-good generation
+monitor + updater -> separate bounded hash chains -> read-only forwarder
+                                                    |-> HMAC-authenticated HTTPS
+                                                    |-> exact ack -> checkpoint
 ```
 
 `Unknown` means only that the digest is absent from the configured database. It
@@ -603,9 +615,22 @@ a clean-file verdict.
 - [x] Added reload, rejection, expiry, and content-health Event Log telemetry.
 - [x] Preserved the monitor's read-only content-store permissions.
 
-The next milestone should add tamper-evident security telemetry with durable
-delivery checkpoints, bounded local spooling, and an authenticated collector
-boundary for fleet health and detection events.
+### Milestone 12 — Tamper-evident security telemetry
+
+- [x] Added independent, bounded monitor and updater telemetry spools.
+- [x] Chained canonical event envelopes with sequence numbers and SHA-256 hashes.
+- [x] Made retention gaps, record changes, and checkpoint mismatches explicit.
+- [x] Added atomic, monotonic per-source delivery checkpoints.
+- [x] Added a separately privileged .NET 10 Windows forwarding service.
+- [x] Required HTTPS and HMAC-SHA256 authentication for every bounded batch.
+- [x] Disabled redirects, cookies, and transparent response decompression.
+- [x] Required an exact sequence-and-hash acknowledgement before checkpointing.
+- [x] Added least-privilege publish, install, status, and removal workflows.
+- [x] Added tamper, pruning, authentication, acknowledgement, and retry tests.
+
+The next milestone should harden production releases with signed artifacts,
+software bills of materials, reproducible release metadata, verified upgrade and
+rollback workflows, and explicit Windows service recovery testing.
 
 ## Ownership and license
 

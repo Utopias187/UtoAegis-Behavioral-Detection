@@ -23,6 +23,10 @@ C:\ProgramData\UtoAegis\State\
   history.db
   quarantine\
 
+C:\ProgramData\UtoAegis\SecurityTelemetry\
+  state.json
+  records\
+
 C:\ProgramData\UtoAegis\Content\
   state.json
   versions\
@@ -75,6 +79,9 @@ allowlist entries, are resolved from the service installation directory.
     "DebounceMilliseconds": 500,
     "HealthIntervalSeconds": 60,
     "ContentReloadIntervalSeconds": 30,
+    "SecurityTelemetrySpoolPath": "C:\\ProgramData\\UtoAegis\\SecurityTelemetry",
+    "DeploymentId": "endpoint-001",
+    "TelemetryMaximumRecords": 10000,
     "Response": {
       "Mode": "ObserveOnly",
       "AllowlistedPathPrefixes": [
@@ -103,6 +110,13 @@ read access to managed content. The two services do not share an executable or
 private credentials. Installation and rotation procedures are documented in the
 [production updater guide](production-threat-updater.md).
 
+`SecurityTelemetrySpoolPath` is optional. When configured, `DeploymentId` is
+required and the service writes health, detection, response, and content-reload
+events to a local SHA-256 hash chain. The monitor has no collector credential and
+does not upload telemetry. The separate `UtoAegisTelemetry` service receives
+read-only access to the spool and owns remote delivery. See the
+[security telemetry guide](security-telemetry.md).
+
 Build and activate the initial signed content before validating or installing
 the service. The complete workflow and bundle schema are in the
 [authenticated update guide](authenticated-threat-updates.md).
@@ -117,6 +131,7 @@ The principal bounds are:
 | `DebounceMilliseconds` | 0–60,000 |
 | `HealthIntervalSeconds` | 10–86,400 |
 | `ContentReloadIntervalSeconds` | 5–3,600 |
+| `TelemetryMaximumRecords` | 1–1,000,000 |
 | `Response:MaxActionsPerWindow` | 1–100 |
 | `Response:RateLimitWindowSeconds` | 1–86,400 |
 
