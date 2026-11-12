@@ -153,8 +153,14 @@ try {
     New-Item -ItemType Directory -Path $deploymentPath | Out-Null
     Copy-Item -LiteralPath (Join-Path $repositoryRoot 'scripts/windows') `
         -Destination $deploymentPath -Recurse
-    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Test-UtoAegisRelease.ps1') `
-        -Destination $deploymentPath
+    foreach ($releaseScript in @(
+            'Test-UtoAegisRelease.ps1',
+            'Install-UtoAegisRelease.ps1',
+            'Restore-UtoAegisRelease.ps1',
+            'Test-UtoAegisServiceRecovery.ps1')) {
+        Copy-Item -LiteralPath (Join-Path $PSScriptRoot $releaseScript) `
+            -Destination $deploymentPath
+    }
     foreach ($document in @('LICENSE', 'THIRD-PARTY-NOTICES.md', 'README.md')) {
         Copy-Item -LiteralPath (Join-Path $repositoryRoot $document) -Destination $staging
     }

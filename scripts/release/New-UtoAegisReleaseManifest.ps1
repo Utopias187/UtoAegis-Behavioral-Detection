@@ -32,6 +32,12 @@ if (-not $rootInfo.PSIsContainer -or $rootInfo.Attributes.HasFlag([IO.FileAttrib
     throw 'The release root must be a regular directory.'
 }
 
+foreach ($directory in Get-ChildItem -LiteralPath $root -Directory -Recurse -Force) {
+    if ($directory.Attributes.HasFlag([IO.FileAttributes]::ReparsePoint)) {
+        throw "Release directories cannot be reparse points: $($directory.FullName)"
+    }
+}
+
 $manifestPath = Join-Path $root 'release-manifest.json'
 $signaturePath = Join-Path $root 'release-manifest.p7s'
 $files = [Collections.Generic.List[object]]::new()

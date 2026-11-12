@@ -34,6 +34,12 @@ if (-not $rootInfo.PSIsContainer -or $rootInfo.Attributes.HasFlag([IO.FileAttrib
     throw 'The release root must be a regular directory.'
 }
 
+foreach ($directory in Get-ChildItem -LiteralPath $root -Directory -Recurse -Force) {
+    if ($directory.Attributes.HasFlag([IO.FileAttributes]::ReparsePoint)) {
+        throw "Release directories cannot be reparse points: $($directory.FullName)"
+    }
+}
+
 $manifestPath = Join-Path $root 'release-manifest.json'
 if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
     throw 'release-manifest.json is missing.'
