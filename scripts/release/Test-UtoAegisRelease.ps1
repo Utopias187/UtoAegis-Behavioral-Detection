@@ -119,6 +119,10 @@ if ($manifest.signatureMode -ceq 'UnsignedDevelopment') {
         throw 'Unsigned development releases require -AllowUnsignedDevelopment.'
     }
 } else {
+    if ($AllowedSignerThumbprint.Count -eq 0) {
+        throw 'Signed releases require at least one allowlisted signer thumbprint.'
+    }
+
     $signaturePath = Join-Path $root 'release-manifest.p7s'
     if (-not (Test-Path -LiteralPath $signaturePath -PathType Leaf)) {
         throw 'The detached release-manifest.p7s signature is missing.'
@@ -128,14 +132,13 @@ if ($manifest.signatureMode -ceq 'UnsignedDevelopment') {
     $content = [Security.Cryptography.Pkcs.ContentInfo]::new($manifestBytes)
     $signed = [Security.Cryptography.Pkcs.SignedCms]::new($content, $true)
     $signed.Decode([IO.File]::ReadAllBytes($signaturePath))
-    $signed.CheckSignature($false)
+    $signed.CheckSignature($true)
     if ($signed.SignerInfos.Count -ne 1) {
         throw 'The release manifest must have exactly one CMS signer.'
     }
 
     $signerThumbprint = $signed.SignerInfos[0].Certificate.Thumbprint
-    if ($AllowedSignerThumbprint.Count -gt 0 -and
-        $signerThumbprint -notin @($AllowedSignerThumbprint | ForEach-Object {
+    if ($signerThumbprint -notin @($AllowedSignerThumbprint | ForEach-Object {
                 $_.Replace(' ', '').ToUpperInvariant()
             })) {
         throw "The release manifest signer is not allowlisted: $signerThumbprint"
