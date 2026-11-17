@@ -1853,3 +1853,20 @@ non-goals are documented in
 - Added state retirement/restoration, wrong-device, repair-without-creation,
   rotation, key replacement, and removal tests. The complete suite now contains
   381 passing tests.
+
+### Windows enrollment lifecycle commands
+
+- Added elevated PowerShell entry points for installation, repair, rotation,
+  and removal, backed by one hardened lifecycle implementation rather than four
+  divergent security paths.
+- Added `ShouldProcess`/`WhatIf`, strict assembly and path validation,
+  filesystem-root and reparse-point refusal, same-tree archives, exact device-ID
+  confirmation for destructive actions, and structured operation results.
+- Restricted the state tree by removing inherited ACLs and granting full
+  control to Local System and Administrators. An explicitly selected state
+  consumer may receive modify access without changing private-key export policy.
+- Made repair validation-only, kept installation idempotent for the exact
+  identity, and reported re-enrollment as required after rotation or removal.
+  Archived state is preserved instead of being recursively deleted.
+- Added parser and security-control tests for the shared lifecycle script and
+  all four operator wrappers. The script test suite and all 381 .NET tests pass.

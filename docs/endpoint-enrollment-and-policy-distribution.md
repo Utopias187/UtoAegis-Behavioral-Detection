@@ -66,6 +66,41 @@ key. A rotation creates a new random device ID and non-exportable key and
 therefore requires new enrollment; archived state is recovery evidence, not an
 active credential.
 
+### Windows lifecycle commands
+
+Run these commands from an elevated PowerShell 7 session. `AssemblyDirectory`
+is the published directory containing `UtoAegis.Core.dll` and
+`UtoAegis.Infrastructure.dll`. The default state root is
+`C:\ProgramData\UtoAegis\Management`.
+
+```powershell
+pwsh ./scripts/windows/Install-UtoAegisEnrollment.ps1 `
+  -AssemblyDirectory 'C:\Program Files\UtoAegis'
+
+pwsh ./scripts/windows/Repair-UtoAegisEnrollment.ps1 `
+  -AssemblyDirectory 'C:\Program Files\UtoAegis'
+
+pwsh ./scripts/windows/Rotate-UtoAegisEnrollment.ps1 `
+  -AssemblyDirectory 'C:\Program Files\UtoAegis' `
+  -ExpectedDeviceId '<current-32-character-device-id>'
+
+pwsh ./scripts/windows/Remove-UtoAegisEnrollment.ps1 `
+  -AssemblyDirectory 'C:\Program Files\UtoAegis' `
+  -ExpectedDeviceId '<current-32-character-device-id>'
+```
+
+All commands support `-WhatIf` and require administrator elevation. The state
+root rejects filesystem roots and reparse points, disables inherited ACLs, and
+grants full control only to Local System and Administrators by default. A
+separate `-StateConsumerIdentity` may receive modify access when a dedicated
+management host requires it. Archives must remain beneath the state root.
+
+Installation is idempotent only for the exact existing state/key pair. Repair
+fails rather than creating missing identity. Rotation and removal emit the
+archive path and set `reEnrollmentRequired` in their result. Do not delete an
+archive until the old server enrollment has been revoked and incident or audit
+retention requirements have been satisfied.
+
 ## Signed request envelope
 
 Every enrolled request signs canonical UTF-8 bytes containing:

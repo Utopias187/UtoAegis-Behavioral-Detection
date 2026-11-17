@@ -689,7 +689,7 @@ a clean-file verdict.
 - [x] Enforce rollout-ring authorization on signed runtime policy.
 - [x] Persist revocation generation and fail closed for revoked credentials.
 - [x] Add durable exact-policy acknowledgement and bounded fleet health.
-- [ ] Add Windows installation, recovery, rotation, and removal workflows.
+- [x] Add Windows installation, recovery, rotation, and removal workflows.
 - [ ] Add integration tests, release packaging, and operator documentation.
 
 ### Remaining product roadmap
