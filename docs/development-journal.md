@@ -1732,3 +1732,14 @@ non-goals are documented in
 - Added credential rollback, equivocation, revocation rollback, terminal
   revocation, identity replacement, persistent-key, and non-exportability tests.
   The complete suite now contains 334 passing tests.
+
+### Replay reservation
+
+- Added a durable SQLite nonce reservation store keyed by device ID and nonce.
+  An immediate transaction prunes expired reservations, enforces a per-device
+  bound, and atomically admits only the first use.
+- Retained reservations for a caller-selected one-minute to 24-hour window.
+  The same nonce remains independent across devices, while concurrent reuse for
+  one device is rejected exactly once.
+- Added duplicate, cross-device, expiry, and concurrent-reservation tests. The
+  complete suite now contains 338 passing tests.
