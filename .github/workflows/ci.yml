@@ -69,6 +69,11 @@ jobs:
         run: |
           ./tests/release/ReleaseMetadata.Tests.ps1
           ./tests/release/DeploymentPlan.Tests.ps1
+          ./tests/release/EnrollmentPackaging.Tests.ps1
+
+      - name: Test endpoint enrollment lifecycle
+        shell: pwsh
+        run: ./tests/management/EnrollmentLifecycleScripts.Tests.ps1
 
       - name: Test authenticated runtime policy
         shell: pwsh

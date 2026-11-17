@@ -165,6 +165,15 @@ try {
     foreach ($document in @('LICENSE', 'THIRD-PARTY-NOTICES.md', 'README.md')) {
         Copy-Item -LiteralPath (Join-Path $repositoryRoot $document) -Destination $staging
     }
+    $documentationPath = Join-Path $staging 'documentation'
+    New-Item -ItemType Directory -Path $documentationPath | Out-Null
+    foreach ($document in @(
+            'endpoint-enrollment-and-policy-distribution.md',
+            'authenticated-runtime-policy-and-integrity-guard.md',
+            'signed-releases-and-upgrades.md')) {
+        Copy-Item -LiteralPath (Join-Path $repositoryRoot "docs/$document") `
+            -Destination $documentationPath
+    }
 
     & (Join-Path $PSScriptRoot 'New-UtoAegisSbom.ps1') `
         -Version $Version `

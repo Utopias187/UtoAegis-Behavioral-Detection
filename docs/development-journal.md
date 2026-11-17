@@ -1870,3 +1870,22 @@ non-goals are documented in
   Archived state is preserved instead of being recursively deleted.
 - Added parser and security-control tests for the shared lifecycle script and
   all four operator wrappers. The script test suite and all 381 .NET tests pass.
+
+### Milestone 15 integration and release handoff
+
+- Added the enrollment lifecycle security test and release-packaging contract
+  to Windows CI alongside the existing 381-test solution, authenticated runtime
+  policy integration, release metadata, and deployment-plan gates.
+- Packaged every Windows enrollment lifecycle entry point through the existing
+  signed release deployment tree. The tools publication carries the Core and
+  Infrastructure assemblies used by the elevated lifecycle host.
+- Added the endpoint enrollment, authenticated runtime policy, and signed
+  release operator guides to the signed release payload and manifest rather
+  than requiring network access during installation or recovery.
+- Verified the complete milestone across real non-exportable CNG key tests,
+  atomic enrollment, authenticated and replay-bound requests, offline-authorized
+  rollout policy, terminal revocation, durable acknowledgements, bounded fleet
+  health, lifecycle scripts, packaging, and CI.
+- Milestone 15 is complete. The final suite contains 381 passing .NET tests plus
+  PowerShell integration, lifecycle-security, release-integrity, packaging, and
+  deployment-plan tests.
