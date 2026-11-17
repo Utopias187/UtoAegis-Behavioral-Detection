@@ -1573,6 +1573,10 @@ forwarder service identities.
   and verified exactly 197 inventoried files. Both extracted archives included
   the Guard executable and baseline, signing, installation, status, and removal
   tools.
+- GitHub's Windows runner exposed its temporary directory through an 8.3 alias
+  while resolving the created test directory to its long path. The integration
+  cleanup guard now resolves both sides before its containment check, preserving
+  fail-safe deletion without making the test dependent on a path spelling.
 
 ### Trust limits
 

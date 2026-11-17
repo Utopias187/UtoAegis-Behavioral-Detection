@@ -117,7 +117,8 @@ try {
 } finally {
     if (Test-Path -LiteralPath $temporaryRoot -PathType Container) {
         $resolved = (Resolve-Path -LiteralPath $temporaryRoot).Path
-        $temporaryPrefix = [IO.Path]::TrimEndingDirectorySeparator([IO.Path]::GetFullPath($env:TEMP)) +
+        $temporaryPrefix = [IO.Path]::TrimEndingDirectorySeparator(
+            (Resolve-Path -LiteralPath $env:TEMP).Path) +
             [IO.Path]::DirectorySeparatorChar
         if (-not $resolved.StartsWith($temporaryPrefix, [StringComparison]::OrdinalIgnoreCase)) {
             throw 'Refusing to remove a runtime policy test directory outside the system temporary directory.'
