@@ -1889,3 +1889,15 @@ non-goals are documented in
 - Milestone 15 is complete. The final suite contains 381 passing .NET tests plus
   PowerShell integration, lifecycle-security, release-integrity, packaging, and
   deployment-plan tests.
+
+## Milestone 16 — Static PE executable analysis
+
+Milestone 16 extracts bounded structural facts from Windows Portable Executable
+files without invoking loader behavior. The trust boundary, status contract,
+resource limits, planned checkpoints, and non-goals are documented in
+`docs/static-pe-executable-analysis.md` before parser implementation begins.
+
+The analyzer is intentionally verdict-neutral. Header fields, section layout,
+imports, resources, metadata, certificate-table presence, and overlays become
+evidence for Milestone 17; none is treated as proof of malware or safety in
+isolation.

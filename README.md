@@ -692,9 +692,18 @@ a clean-file verdict.
 - [x] Add Windows installation, recovery, rotation, and removal workflows.
 - [x] Add integration tests, release packaging, and operator documentation.
 
+### Milestone 16 — Static PE executable analysis
+
+- [ ] Add bounded PE recognition and strict header extraction.
+- [ ] Validate sections, ranges, overlaps, mappings, and entropy facts.
+- [ ] Traverse imports, delay imports, exports, and resources safely.
+- [ ] Extract debug, TLS, load-configuration, relocation, and exception facts.
+- [ ] Add managed metadata, certificate-table facts, and overlay analysis.
+- [ ] Integrate PE facts into scanning, CLI JSON, history, and telemetry.
+- [ ] Add malformed corpus, regression coverage, packaging, and documentation.
+
 ### Remaining product roadmap
 
-- Milestone 16: static PE-file analysis.
 - Milestone 17: heuristic risk scoring and explainable verdict aggregation.
 - Milestone 18: behavioral telemetry and detection.
 - Milestone 19: desktop operator interface.
