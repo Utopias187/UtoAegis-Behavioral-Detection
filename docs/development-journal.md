@@ -1762,3 +1762,22 @@ non-goals are documented in
 - Added end-to-end credential verification, replay, token reuse, transaction
   rollback, and schema migration tests. The complete suite now contains 343
   passing tests.
+
+### Offline-authorized rollout distribution
+
+- Added a strict signed distribution authorization that binds its sequence,
+  exact runtime-policy ID and sequence, exact manifest SHA-256,
+  allowed rollout rings, bounded validity, and offline policy-authority key.
+- Added a closed package format containing only the existing signed runtime
+  policy directory plus detached authorization bytes and signature. Reparse
+  points, extra entries, invalid UTF-8, duplicate or unknown JSON properties,
+  oversized inputs, and untrusted keys fail closed.
+- Required the endpoint to have a currently active, unexpired enrollment in an
+  authorized ring. Suspended, revoked, expired, and wrong-ring credentials are
+  rejected locally even if the management service returns the package.
+- Reused the existing runtime-policy signature, expiry, and durable
+  anti-rollback path, then matched the offline authorization to the verified
+  policy ID, sequence, and exact manifest digest before activation.
+- Added valid-rollout, wrong-ring, authorization tamper, policy mismatch,
+  expiration, inactive enrollment, malformed authorization, and package-shape
+  tests. The complete suite now contains 354 passing tests.

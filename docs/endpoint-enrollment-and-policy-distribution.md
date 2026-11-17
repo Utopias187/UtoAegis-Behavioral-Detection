@@ -118,6 +118,22 @@ must enforce that list. Promotion means publishing the same signed policy to a
 broader authorized ring or signing a new higher-sequence policy; it never means
 editing signed bytes.
 
+The distribution package has one regular `policy` directory containing the
+existing `policy.json` and `policy.sig` files, plus regular
+`authorization.json` and `authorization.sig` files. No other entries or
+reparse points are accepted. The signed authorization binds its own sequence,
+the exact runtime-policy ID and sequence, the SHA-256 digest of the
+exact policy manifest bytes, the allowed rollout rings, a bounded validity
+window, and the offline policy-authority key ID.
+
+The endpoint verifies the authorization signature and time window, requires a
+currently active and unexpired enrollment in an allowed ring, verifies the
+runtime-policy signature and time window, and compares the policy identity,
+sequence, and manifest digest in constant time where appropriate. The verified
+runtime policy then passes through the existing durable anti-rollback store
+before activation. The management service cannot add a ring or substitute a
+different policy without invalidating the offline signature.
+
 ## Revocation
 
 The management service maintains a monotonic revocation generation. A device
