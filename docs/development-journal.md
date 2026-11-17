@@ -1665,3 +1665,22 @@ non-goals are documented in
 - Added method, target, body, signature-format, key-mismatch, state-conflict,
   and malformed-state tests. The complete suite now passes 304 tests across the
   existing 14 projects.
+
+### One-time bootstrap admission
+
+- Added 256-bit cryptographically random bootstrap tokens encoded as canonical
+  base64url. Secret access is explicit, string formatting is redacted, and
+  disposal clears the in-memory secret bytes.
+- Added a dedicated strict SQLite enrollment store that persists only token
+  SHA-256 digests, assigned rollout rings, bounded validity, and consumption
+  evidence. The schema carries a product identity and version so an unrelated
+  SQLite database cannot be accepted accidentally.
+- Consumed tokens with an immediate transaction and a conditional update, so
+  concurrent requests can admit exactly one device. Reuse, unknown tokens, and
+  tokens at or beyond expiration all return no admission.
+- Restricted token validity to seven days, normalized device IDs, refused
+  database roots and reparse-point directories, and used full durability for
+  admission state.
+- Added generation, canonical parsing, redaction, clearing, schema identity,
+  expiry, one-use, concurrent-consumption, hash-only storage, and validity-bound
+  tests. The complete suite now contains 316 passing tests.
