@@ -112,6 +112,7 @@ try {
     if ($LASTEXITCODE -eq 0) {
         throw 'The integrity guard accepted a tampered runtime policy.'
     }
+    $global:LASTEXITCODE = 0
 
     Write-Host 'Runtime policy script integration tests passed.'
 } finally {

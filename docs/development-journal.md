@@ -1576,7 +1576,10 @@ forwarder service identities.
 - GitHub's Windows runner exposed its temporary directory through an 8.3 alias
   while resolving the created test directory to its long path. The integration
   cleanup guard now resolves both sides before its containment check, preserving
-  fail-safe deletion without making the test dependent on a path spelling.
+  fail-safe deletion without making the test dependent on a path spelling. The
+  harness also clears the expected nonzero native exit after it proves tamper
+  rejection so GitHub's PowerShell wrapper does not reinterpret success as a
+  failed step.
 
 ### Trust limits
 
