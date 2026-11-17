@@ -1648,3 +1648,20 @@ privacy-limited health snapshot.
 The complete protocol, security properties, data flow, privacy boundary, and
 non-goals are documented in
 `docs/endpoint-enrollment-and-policy-distribution.md` before code changes begin.
+
+### Device identity and signed-request foundation
+
+- Added a validated random device identifier, named-key reference, public-key
+  fingerprint, and creation timestamp without storing private key material.
+- Added deterministic canonical request bytes binding the device, enrollment,
+  credential sequence, timestamp, nonce, HTTP method, path and query, and exact
+  body SHA-256 digest.
+- Added ECDSA P-256 signing and verification using fixed 64-byte IEEE P1363
+  signatures. The signer refuses an identity whose persisted public-key
+  fingerprint does not match the active key.
+- Added strict, bounded device-identity persistence with duplicate and unknown
+  JSON property rejection, reparse-point checks, an exclusive operation lock,
+  atomic creation, and refusal to replace a conflicting identity.
+- Added method, target, body, signature-format, key-mismatch, state-conflict,
+  and malformed-state tests. The complete suite now passes 304 tests across the
+  existing 14 projects.
