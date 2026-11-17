@@ -76,6 +76,14 @@ checks the stored public key, bounded clock skew, one-time nonce, exact method,
 path, body digest, credential status, and revocation generation before handling
 the request.
 
+All post-enrollment handlers use one admission coordinator. It loads the
+enrollment record by ID, requires the exact device and current credential
+sequence, active status, and unexpired validity, verifies the stored public-key
+fingerprint and signature against the exact method, target, and body, then
+reserves the nonce durably. Invalid signatures never consume a nonce, while a
+successfully authenticated nonce remains unavailable for the complete request
+validity window.
+
 ## Policy distribution flow
 
 ```text

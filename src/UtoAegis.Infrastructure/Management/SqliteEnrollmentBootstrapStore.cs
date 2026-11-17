@@ -317,6 +317,72 @@ public sealed class SqliteEnrollmentBootstrapStore
         }
     }
 
+    public async ValueTask<CoordinatorDeviceEnrollment?> GetEnrollmentAsync(
+        string enrollmentId,
+        CancellationToken cancellationToken = default)
+    {
+        enrollmentId = NormalizeHex(enrollmentId, 32, nameof(enrollmentId));
+        try
+        {
+            await using var connection = CreateConnection();
+            await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+            await using var command = connection.CreateCommand();
+            command.CommandText =
+                """
+                SELECT enrollment_id, device_id, public_key_spki_base64,
+                       public_key_sha256, rollout_ring, credential_sequence,
+                       status, revocation_generation, issued_utc, expires_utc,
+                       management_origin
+                FROM device_enrollments
+                WHERE enrollment_id = $enrollment_id
+                LIMIT 1;
+                """;
+            command.Parameters.AddWithValue("$enrollment_id", enrollmentId);
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken)
+                .ConfigureAwait(false);
+            if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                return null;
+            }
+
+            if (!Enum.TryParse<DeviceEnrollmentStatus>(reader.GetString(6), false, out var status) ||
+                !Enum.IsDefined(status))
+            {
+                throw new DeviceManagementException(
+                    "The stored device enrollment status is invalid.");
+            }
+
+            return new CoordinatorDeviceEnrollment(
+                reader.GetString(0),
+                reader.GetString(1),
+                reader.GetString(2),
+                reader.GetString(3),
+                new RolloutRing(reader.GetString(4)),
+                reader.GetInt64(5),
+                status,
+                reader.GetInt64(7),
+                ParseTimestamp(reader.GetString(8)),
+                ParseTimestamp(reader.GetString(9)),
+                new Uri(reader.GetString(10), UriKind.Absolute));
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (DeviceManagementException)
+        {
+            throw;
+        }
+        catch (Exception exception) when (
+            IsStorageException(exception) ||
+            exception is ArgumentException or FormatException or OverflowException)
+        {
+            throw new DeviceManagementException(
+                "The stored device enrollment could not be read.",
+                exception);
+        }
+    }
+
     private SqliteConnection CreateConnection()
     {
         var builder = new SqliteConnectionStringBuilder
@@ -395,6 +461,28 @@ public sealed class SqliteEnrollmentBootstrapStore
 
         return deviceId.ToLowerInvariant();
     }
+
+    private static string NormalizeHex(string value, int length, string parameterName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(value, parameterName);
+        if (value.Length != length || value.Any(character =>
+                !char.IsAsciiDigit(character) &&
+                character is not (>= 'a' and <= 'f') and not (>= 'A' and <= 'F')))
+        {
+            throw new ArgumentException(
+                $"The value must contain exactly {length} hexadecimal characters.",
+                parameterName);
+        }
+
+        return value.ToLowerInvariant();
+    }
+
+    private static DateTimeOffset ParseTimestamp(string value) =>
+        DateTimeOffset.ParseExact(
+            value,
+            "O",
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal);
 
     private static string FormatTimestamp(DateTimeOffset value) =>
         value.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture);

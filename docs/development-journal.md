@@ -1798,3 +1798,20 @@ non-goals are documented in
   remote state transition.
 - Added persist-before-fail, restart, terminal-reactivation, and expiration
   tests. The complete suite now contains 358 passing tests.
+
+### Unified management request admission
+
+- Added strict coordinator-side enrollment lookup including the enrolled public
+  key, current credential sequence, status, expiry, rollout ring, revocation
+  generation, and management origin.
+- Added one post-enrollment request admission coordinator that requires an
+  active, current enrollment and a fresh timestamp before verifying the exact
+  HTTP method, path and query, and body digest with the enrolled P-256 key.
+- Verified the stored SubjectPublicKeyInfo fingerprint before using the key.
+  Only a valid request may reserve its nonce, so invalid traffic cannot consume
+  the endpoint's replay budget.
+- Reserved admitted nonces durably for at least the complete request-validity
+  window. A repeated request is rejected before a management handler can run.
+- Added exact-request, replay, wrong-body, stale-time, credential-sequence,
+  suspended, and revoked enrollment tests. The complete suite now contains 365
+  passing tests.

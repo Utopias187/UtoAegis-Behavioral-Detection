@@ -684,7 +684,7 @@ a clean-file verdict.
 ### Milestone 15 — Endpoint enrollment and policy distribution
 
 - [x] Create non-exportable per-device identity and durable enrollment state.
-- [ ] Authenticate and replay-bind every management request.
+- [x] Authenticate and replay-bind every management request.
 - [x] Consume one-time bootstrap credentials during enrollment.
 - [x] Enforce rollout-ring authorization on signed runtime policy.
 - [x] Persist revocation generation and fail closed for revoked credentials.
