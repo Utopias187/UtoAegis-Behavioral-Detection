@@ -1704,3 +1704,31 @@ non-goals are documented in
 - Added proof authority, token, timestamp, public-key tamper, credential tamper,
   device mismatch, expiry, and authenticated revocation tests. The complete
   suite now contains 325 passing tests.
+
+### Durable credential and revocation state
+
+- Added strict, bounded enrollment state containing the exact credential hash,
+  enrollment and device identity, public-key fingerprint, rollout ring, status,
+  revocation generation, expiration, and management origin.
+- Persisted state with an exclusive operation lock and atomic replacement.
+  Lower credential sequences, changed bytes at the same sequence, lower
+  revocation generations, identity replacement, and management-origin changes
+  fail closed.
+- Made revocation terminal for an enrollment record. Reactivation requires an
+  explicit local reset and new enrollment rather than a later online response.
+
+### Non-exportable Windows identity key
+
+- Added a Windows CNG device-key store using the Microsoft Software Key Storage
+  Provider, ECDSA P-256, signing-only usage, no export permission, and machine
+  scope for production.
+- Persisted only the CNG key name, random device ID, public-key fingerprint, and
+  creation time. Missing keys, fingerprint changes, exportable keys, incorrect
+  algorithms, and a pre-existing key without matching state all fail closed.
+- Added current-user-scope integration tests that exercise the same key
+  properties without requiring administrator access. They prove private-key
+  export fails, reopening preserves the exact device ID and public key, and an
+  untracked named key is not silently adopted.
+- Added credential rollback, equivocation, revocation rollback, terminal
+  revocation, identity replacement, persistent-key, and non-exportability tests.
+  The complete suite now contains 334 passing tests.
