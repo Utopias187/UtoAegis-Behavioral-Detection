@@ -1615,3 +1615,36 @@ code-signing certificate that is not installed locally.
 Add authenticated endpoint enrollment and policy distribution with per-device
 identity, staged rollout rings, revocation, durable policy acknowledgement, and
 fleet health visibility while keeping release and policy signing keys offline.
+
+## 2026-11-17 — Milestone 15: endpoint enrollment and policy distribution
+
+### Goal
+
+Give every managed endpoint a non-transferable device identity and a bounded,
+authenticated management channel. Use that channel to distribute only
+offline-signed runtime policy authorized for the endpoint's rollout ring, carry
+monotonic revocation state, and durably report exact policy application and a
+privacy-limited health snapshot.
+
+### Planned trust separation
+
+- The endpoint generates its private key locally and never transmits it.
+- A one-time bootstrap credential admits a device but cannot authorize policy.
+- The online coordinator assigns rings, authenticates devices, distributes
+  approved bundles, records acknowledgements, and revokes enrollments.
+- The offline runtime-policy signer remains the only authority that can change
+  response and integrity behavior.
+- Endpoint anti-rollback state remains authoritative even if the coordinator is
+  compromised or returns stale content.
+
+### Initial implementation sequence
+
+1. Add device identity, canonical signed requests, and durable strict state.
+2. Add one-time enrollment and revocation credentials.
+3. Add ring-scoped policy distribution and endpoint enforcement.
+4. Add durable acknowledgements and bounded fleet health.
+5. Add Windows deployment and end-to-end verification.
+
+The complete protocol, security properties, data flow, privacy boundary, and
+non-goals are documented in
+`docs/endpoint-enrollment-and-policy-distribution.md` before code changes begin.

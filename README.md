@@ -36,6 +36,9 @@ Release signing, verification, and upgrades are documented in the
 [signed release guide](docs/signed-releases-and-upgrades.md).
 Runtime policy creation, Guard deployment, drift handling, and recovery are in
 the [runtime integrity guide](docs/authenticated-runtime-policy-and-integrity-guard.md).
+The Milestone 15 enrollment protocol, trust boundaries, rollout model, and
+privacy limits are in the
+[endpoint enrollment guide](docs/endpoint-enrollment-and-policy-distribution.md).
 
 ## Current architecture
 
@@ -678,9 +681,25 @@ a clean-file verdict.
 - [x] Added baseline export, offline signing, install, status, and removal workflows.
 - [x] Added policy tamper, expiry, rollback, recovery, and rate-limit tests.
 
-The next milestone should add authenticated endpoint enrollment and policy
-distribution with device identity, staged rollout rings, revocation, and
-fleet-visible policy/health acknowledgement without moving signing keys online.
+### Milestone 15 — Endpoint enrollment and policy distribution
+
+- [ ] Create non-exportable per-device identity and durable enrollment state.
+- [ ] Authenticate and replay-bind every management request.
+- [ ] Consume one-time bootstrap credentials during enrollment.
+- [ ] Enforce rollout-ring authorization on signed runtime policy.
+- [ ] Persist revocation generation and fail closed for revoked credentials.
+- [ ] Add durable exact-policy acknowledgement and bounded fleet health.
+- [ ] Add Windows installation, recovery, rotation, and removal workflows.
+- [ ] Add integration tests, release packaging, and operator documentation.
+
+### Remaining product roadmap
+
+- Milestone 16: static PE-file analysis.
+- Milestone 17: heuristic risk scoring and explainable verdict aggregation.
+- Milestone 18: behavioral telemetry and detection.
+- Milestone 19: desktop operator interface.
+- Milestone 20: cloud intelligence/control-plane hardening and production pilot
+  readiness.
 
 ## Ownership and license
 
