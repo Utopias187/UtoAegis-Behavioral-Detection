@@ -6,7 +6,7 @@ namespace UtoAegis.Infrastructure.Management;
 
 public sealed class SqliteEnrollmentBootstrapStore
 {
-    public const int CurrentSchemaVersion = 1;
+    public const int CurrentSchemaVersion = 2;
     public const string StoreIdentity = "utoaegis-enrollment-bootstrap";
 
     private readonly string databasePath;
@@ -79,12 +79,29 @@ public sealed class SqliteEnrollmentBootstrapStore
                             CHECK(consumed_device_id IS NULL OR length(consumed_device_id) = 32),
                         CHECK((consumed_utc IS NULL) = (consumed_device_id IS NULL))
                     ) STRICT;
+                    CREATE TABLE device_enrollments (
+                        enrollment_id TEXT PRIMARY KEY NOT NULL CHECK(length(enrollment_id) = 32),
+                        device_id TEXT UNIQUE NOT NULL CHECK(length(device_id) = 32),
+                        public_key_spki_base64 TEXT NOT NULL,
+                        public_key_sha256 TEXT UNIQUE NOT NULL CHECK(length(public_key_sha256) = 64),
+                        rollout_ring TEXT NOT NULL CHECK(length(rollout_ring) BETWEEN 1 AND 32),
+                        credential_sequence INTEGER NOT NULL CHECK(credential_sequence > 0),
+                        status TEXT NOT NULL CHECK(status IN ('Active', 'Suspended', 'Revoked')),
+                        revocation_generation INTEGER NOT NULL CHECK(revocation_generation >= 0),
+                        issued_utc TEXT NOT NULL,
+                        expires_utc TEXT NOT NULL,
+                        management_origin TEXT NOT NULL
+                    ) STRICT;
                     INSERT INTO enrollment_store_metadata (store_identity, schema_version)
-                    VALUES ('utoaegis-enrollment-bootstrap', 1);
-                    PRAGMA user_version = 1;
+                    VALUES ('utoaegis-enrollment-bootstrap', 2);
+                    PRAGMA user_version = 2;
                     """;
                 await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
                 await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            }
+            else if (version == 1)
+            {
+                await ApplyVersionTwoAsync(connection, cancellationToken).ConfigureAwait(false);
             }
 
             await ValidateStoreIdentityAsync(connection, cancellationToken).ConfigureAwait(false);
@@ -207,6 +224,99 @@ public sealed class SqliteEnrollmentBootstrapStore
         }
     }
 
+    public async ValueTask<CoordinatorDeviceEnrollment?> EnrollAsync(
+        EnrollmentBootstrapToken token,
+        VerifiedDeviceEnrollmentProof proof,
+        Uri managementOrigin,
+        DateTimeOffset nowUtc,
+        TimeSpan credentialLifetime,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(token);
+        ArgumentNullException.ThrowIfNull(proof);
+        if (credentialLifetime < TimeSpan.FromHours(1) || credentialLifetime > TimeSpan.FromDays(90))
+        {
+            throw new ArgumentOutOfRangeException(nameof(credentialLifetime));
+        }
+
+        var origin = DeviceEnrollmentCredential.NormalizeManagementOrigin(managementOrigin);
+        var now = nowUtc.ToUniversalTime();
+        try
+        {
+            await using var connection = CreateConnection();
+            await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+            await using var transaction = connection.BeginTransaction(deferred: false);
+            await using var consume = connection.CreateCommand();
+            consume.Transaction = transaction;
+            consume.CommandText =
+                """
+                UPDATE bootstrap_tokens
+                SET consumed_utc = $now, consumed_device_id = $device_id
+                WHERE token_sha256 = $token_sha256
+                  AND consumed_utc IS NULL
+                  AND expires_utc > $now
+                RETURNING rollout_ring;
+                """;
+            consume.Parameters.AddWithValue("$now", FormatTimestamp(now));
+            consume.Parameters.AddWithValue("$device_id", proof.DeviceId);
+            consume.Parameters.AddWithValue("$token_sha256", token.ComputeSha256());
+            var ringValue = await consume.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+            if (ringValue is not string ring)
+            {
+                await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+                return null;
+            }
+
+            var enrollment = new CoordinatorDeviceEnrollment(
+                Guid.NewGuid().ToString("N"),
+                proof.DeviceId,
+                proof.PublicKeySpkiBase64,
+                proof.PublicKeySha256,
+                new RolloutRing(ring),
+                1,
+                DeviceEnrollmentStatus.Active,
+                0,
+                now,
+                now + credentialLifetime,
+                origin);
+            await using var insert = connection.CreateCommand();
+            insert.Transaction = transaction;
+            insert.CommandText =
+                """
+                INSERT INTO device_enrollments (
+                    enrollment_id, device_id, public_key_spki_base64, public_key_sha256,
+                    rollout_ring, credential_sequence, status, revocation_generation,
+                    issued_utc, expires_utc, management_origin)
+                VALUES (
+                    $enrollment_id, $device_id, $public_key_spki_base64, $public_key_sha256,
+                    $rollout_ring, $credential_sequence, $status, $revocation_generation,
+                    $issued_utc, $expires_utc, $management_origin);
+                """;
+            insert.Parameters.AddWithValue("$enrollment_id", enrollment.EnrollmentId);
+            insert.Parameters.AddWithValue("$device_id", enrollment.DeviceId);
+            insert.Parameters.AddWithValue("$public_key_spki_base64", enrollment.PublicKeySpkiBase64);
+            insert.Parameters.AddWithValue("$public_key_sha256", enrollment.PublicKeySha256);
+            insert.Parameters.AddWithValue("$rollout_ring", enrollment.RolloutRing.Value);
+            insert.Parameters.AddWithValue("$credential_sequence", enrollment.CredentialSequence);
+            insert.Parameters.AddWithValue("$status", enrollment.Status.ToString());
+            insert.Parameters.AddWithValue("$revocation_generation", enrollment.RevocationGeneration);
+            insert.Parameters.AddWithValue("$issued_utc", FormatTimestamp(enrollment.IssuedUtc));
+            insert.Parameters.AddWithValue("$expires_utc", FormatTimestamp(enrollment.ExpiresUtc));
+            insert.Parameters.AddWithValue("$management_origin", enrollment.ManagementOrigin.AbsoluteUri);
+            await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            return enrollment;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception) when (IsStorageException(exception))
+        {
+            throw new DeviceManagementException("The device enrollment could not be committed.", exception);
+        }
+    }
+
     private SqliteConnection CreateConnection()
     {
         var builder = new SqliteConnectionStringBuilder
@@ -218,6 +328,36 @@ public sealed class SqliteEnrollmentBootstrapStore
             DefaultTimeout = 10
         };
         return new SqliteConnection(builder.ToString());
+    }
+
+    private static async ValueTask ApplyVersionTwoAsync(
+        SqliteConnection connection,
+        CancellationToken cancellationToken)
+    {
+        await using var transaction = connection.BeginTransaction(deferred: false);
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText =
+            """
+            CREATE TABLE device_enrollments (
+                enrollment_id TEXT PRIMARY KEY NOT NULL CHECK(length(enrollment_id) = 32),
+                device_id TEXT UNIQUE NOT NULL CHECK(length(device_id) = 32),
+                public_key_spki_base64 TEXT NOT NULL,
+                public_key_sha256 TEXT UNIQUE NOT NULL CHECK(length(public_key_sha256) = 64),
+                rollout_ring TEXT NOT NULL CHECK(length(rollout_ring) BETWEEN 1 AND 32),
+                credential_sequence INTEGER NOT NULL CHECK(credential_sequence > 0),
+                status TEXT NOT NULL CHECK(status IN ('Active', 'Suspended', 'Revoked')),
+                revocation_generation INTEGER NOT NULL CHECK(revocation_generation >= 0),
+                issued_utc TEXT NOT NULL,
+                expires_utc TEXT NOT NULL,
+                management_origin TEXT NOT NULL
+            ) STRICT;
+            UPDATE enrollment_store_metadata SET schema_version = 2
+            WHERE store_identity = 'utoaegis-enrollment-bootstrap';
+            PRAGMA user_version = 2;
+            """;
+        await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
     }
 
     private static async ValueTask ValidateStoreIdentityAsync(

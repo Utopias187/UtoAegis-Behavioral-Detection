@@ -44,7 +44,7 @@ public sealed class SqliteEnrollmentBootstrapStoreTests
         await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText = "PRAGMA user_version;";
-        Assert.AreEqual(1L, (long)(await command.ExecuteScalarAsync())!);
+        Assert.AreEqual(2L, (long)(await command.ExecuteScalarAsync())!);
     }
 
     [TestMethod]
@@ -62,8 +62,8 @@ public sealed class SqliteEnrollmentBootstrapStoreTests
                     schema_version INTEGER NOT NULL
                 ) STRICT;
                 INSERT INTO enrollment_store_metadata (store_identity, schema_version)
-                VALUES ('different-product', 1);
-                PRAGMA user_version = 1;
+                VALUES ('different-product', 2);
+                PRAGMA user_version = 2;
                 """;
             await command.ExecuteNonQueryAsync();
         }
@@ -72,6 +72,45 @@ public sealed class SqliteEnrollmentBootstrapStoreTests
             async () => await CreateStore().InitializeAsync());
 
         StringAssert.Contains(exception.Message, "identity");
+    }
+
+    [TestMethod]
+    public async Task InitializeAsync_VersionOneDatabase_MigratesEnrollmentTable()
+    {
+        Directory.CreateDirectory(testDirectory);
+        await using (var connection = new SqliteConnection($"Data Source={databasePath}"))
+        {
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText =
+                """
+                CREATE TABLE enrollment_store_metadata (
+                    store_identity TEXT PRIMARY KEY NOT NULL,
+                    schema_version INTEGER NOT NULL
+                ) STRICT;
+                CREATE TABLE bootstrap_tokens (
+                    token_sha256 TEXT PRIMARY KEY NOT NULL,
+                    rollout_ring TEXT NOT NULL,
+                    issued_utc TEXT NOT NULL,
+                    expires_utc TEXT NOT NULL,
+                    consumed_utc TEXT NULL,
+                    consumed_device_id TEXT NULL
+                ) STRICT;
+                INSERT INTO enrollment_store_metadata (store_identity, schema_version)
+                VALUES ('utoaegis-enrollment-bootstrap', 1);
+                PRAGMA user_version = 1;
+                """;
+            await command.ExecuteNonQueryAsync();
+        }
+
+        await CreateStore().InitializeAsync();
+
+        await using var migrated = new SqliteConnection($"Data Source={databasePath}");
+        await migrated.OpenAsync();
+        await using var verify = migrated.CreateCommand();
+        verify.CommandText =
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'device_enrollments';";
+        Assert.AreEqual(1L, (long)(await verify.ExecuteScalarAsync())!);
     }
 
     [TestMethod]

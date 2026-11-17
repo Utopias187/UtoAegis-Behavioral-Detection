@@ -685,7 +685,7 @@ a clean-file verdict.
 
 - [x] Create non-exportable per-device identity and durable enrollment state.
 - [ ] Authenticate and replay-bind every management request.
-- [ ] Consume one-time bootstrap credentials during enrollment.
+- [x] Consume one-time bootstrap credentials during enrollment.
 - [ ] Enforce rollout-ring authorization on signed runtime policy.
 - [ ] Persist revocation generation and fail closed for revoked credentials.
 - [ ] Add durable exact-policy acknowledgement and bounded fleet health.

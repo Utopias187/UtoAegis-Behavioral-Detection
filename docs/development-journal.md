@@ -1743,3 +1743,22 @@ non-goals are documented in
   one device is rejected exactly once.
 - Added duplicate, cross-device, expiry, and concurrent-reservation tests. The
   complete suite now contains 338 passing tests.
+
+### Atomic coordinator enrollment
+
+- Migrated the strict enrollment database from schema 1 to schema 2 with a
+  device-enrollment table that binds a unique device ID and public-key
+  fingerprint to its enrollment ID, ring, status, sequence, revocation
+  generation, validity, and management origin.
+- Added a coordinator flow that verifies proof of key possession and request
+  freshness, reserves the nonce, atomically consumes the bootstrap token and
+  creates the durable device record, then issues a detached signed credential.
+- Kept the enrollment-authority key separate from runtime-policy signing keys.
+  The issuer creates only enrollment credentials and cannot authorize endpoint
+  response or integrity behavior.
+- A repeated proof fails at replay reservation, a fresh proof cannot reuse a
+  consumed token, and a duplicate-device database failure rolls back token
+  consumption. Version-1 stores migrate without losing issued bootstrap tokens.
+- Added end-to-end credential verification, replay, token reuse, transaction
+  rollback, and schema migration tests. The complete suite now contains 343
+  passing tests.
