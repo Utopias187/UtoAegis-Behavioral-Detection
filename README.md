@@ -694,7 +694,7 @@ a clean-file verdict.
 
 ### Milestone 16 — Static PE executable analysis
 
-- [ ] Add bounded PE recognition and strict header extraction.
+- [x] Add bounded PE recognition and strict header extraction.
 - [ ] Validate sections, ranges, overlaps, mappings, and entropy facts.
 - [ ] Traverse imports, delay imports, exports, and resources safely.
 - [ ] Extract debug, TLS, load-configuration, relocation, and exception facts.

@@ -1901,3 +1901,20 @@ The analyzer is intentionally verdict-neutral. Header fields, section layout,
 imports, resources, metadata, certificate-table presence, and overlays become
 evidence for Milestone 17; none is treated as proof of malware or safety in
 isolation.
+
+### Bounded PE recognition and header extraction
+
+- Added a verdict-neutral analysis result with explicit analyzed, non-PE,
+  unsupported, malformed, unsafe-input, and I/O states plus stable issue codes.
+- Added configurable file-size and section-count limits. The analyzer rejects
+  missing files, directories, reparse points, empty files, oversized inputs,
+  and files whose length changes between inspection and the opened handle.
+- Recognized the DOS signature before invoking the PE reader, distinguished
+  ordinary non-PE files from truncated or malformed PE candidates, and retained
+  cancellation semantics without exposing exception text as detection data.
+- Extracted bounded PE32/PE32+ machine, timestamp, characteristics, subsystem,
+  DLL characteristics, image base, entry point, alignments, image/header sizes,
+  checksum, section count, and data-directory count using checked conversions.
+- Added valid managed-assembly, non-PE, truncated MZ, invalid PE offset, empty,
+  and configured-size-limit tests. The complete suite now contains 387 passing
+  tests.
