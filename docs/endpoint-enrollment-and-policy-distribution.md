@@ -117,6 +117,14 @@ Policy download and acknowledgement are separate operations. A lost network
 response therefore cannot make an unpersisted application look successful or
 make a successfully applied policy disappear from fleet health.
 
+After policy activation, the endpoint atomically records a pending
+acknowledgement containing a random acknowledgement ID and the exact device,
+enrollment, policy ID, sequence, manifest SHA-256, and application time. A retry
+reuses the same canonical acknowledgement. The record remains pending until
+the server confirms that exact acknowledgement ID; a different policy cannot
+replace it while delivery is pending, and a different confirmation cannot mark
+it delivered.
+
 ## Staged rollout
 
 Rollout rings use short validated identifiers such as `canary`, `pilot`, and
@@ -165,6 +173,11 @@ agent version, rollout ring, current policy identity/sequence/hash, last policy
 verification result, monitor/updater/telemetry/guard status, last successful
 contact, and a bounded list of stable error codes. It excludes file paths,
 usernames, process command lines, file contents, and arbitrary log text.
+
+The schema permits at most 16 error identifiers of at most 64 safe ASCII
+characters each. Component and verification values are closed enums, timestamps
+are UTC, error identifiers are normalized and sorted, and the complete document
+has deterministic canonical bytes suitable for the signed request envelope.
 
 ## Implementation stages
 

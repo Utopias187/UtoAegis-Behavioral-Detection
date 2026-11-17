@@ -1815,3 +1815,24 @@ non-goals are documented in
 - Added exact-request, replay, wrong-body, stale-time, credential-sequence,
   suspended, and revoked enrollment tests. The complete suite now contains 365
   passing tests.
+
+### Durable policy acknowledgement and bounded fleet health
+
+- Added canonical exact-policy acknowledgements binding a stable random
+  acknowledgement ID to the device, enrollment, policy ID, sequence, exact
+  manifest SHA-256, and application time.
+- Added strict atomic acknowledgement persistence. Retries preserve the same
+  acknowledgement bytes across restart, a higher policy cannot replace a
+  pending acknowledgement, and enrollment identity cannot change implicitly.
+- Required an exact acknowledgement-ID confirmation before marking delivery.
+  Incorrect confirmations leave the record pending, while successful delivery
+  permits the next higher policy acknowledgement without lowering the durable
+  policy floor.
+- Added a canonical fleet-health schema containing only protocol and agent
+  versions, pseudonymous device/enrollment IDs, rollout ring, exact current
+  policy identity, closed component states, timestamps, and at most 16 stable
+  error identifiers. Paths, usernames, command lines, contents, and arbitrary
+  log strings have no fields and fail identifier validation.
+- Added canonicalization, privacy-bound, persistence, retry, confirmation,
+  replacement, enrollment-binding, and malformed-state tests. The complete
+  suite now contains 376 passing tests.
