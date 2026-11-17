@@ -1684,3 +1684,23 @@ non-goals are documented in
 - Added generation, canonical parsing, redaction, clearing, schema identity,
   expiry, one-use, concurrent-consumption, hash-only storage, and validity-bound
   tests. The complete suite now contains 316 passing tests.
+
+### Enrollment proof and authenticated credentials
+
+- Added a canonical proof-of-possession document that binds the device ID,
+  SubjectPublicKeyInfo bytes and fingerprint, bootstrap-token digest, timestamp,
+  nonce, and normalized HTTPS management origin.
+- Signed enrollment proofs with the endpoint ECDSA P-256 key using fixed P1363
+  signatures. Verification imports the submitted public key, requires P-256,
+  checks the exact signature, enforces a bounded freshness window, and binds the
+  proof to the presented bootstrap token and expected origin.
+- Added strict server-issued enrollment credentials binding device and
+  enrollment IDs, public-key fingerprint, rollout ring, credential sequence,
+  active/suspended/revoked status, monotonic revocation generation, validity
+  window, management origin, and enrollment-authority key ID.
+- Required detached ECDSA P-256 credential signatures from a dedicated trusted
+  public-key set, exact device-key binding, no more than 90 days of validity,
+  and explicit not-yet-valid and expired rejection.
+- Added proof authority, token, timestamp, public-key tamper, credential tamper,
+  device mismatch, expiry, and authenticated revocation tests. The complete
+  suite now contains 325 passing tests.
