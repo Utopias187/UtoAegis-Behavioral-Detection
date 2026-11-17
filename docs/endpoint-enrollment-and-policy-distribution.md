@@ -143,6 +143,13 @@ observed generation and reject lower values. Revocation cannot remotely erase
 local policy or telemetry; operators must use incident-response procedures for
 containment and re-enrollment.
 
+Credential refresh is a single verify-and-persist operation. An authenticated
+suspension or revocation is committed atomically before the operation reports
+that the enrollment is inactive. On restart, management and policy operations
+load the durable snapshot and require active, unexpired state. Once revoked,
+the enrollment cannot become active again through a later credential; recovery
+requires an explicit local reset and a new enrollment.
+
 ## Bounded fleet health
 
 The health snapshot includes only protocol version, device and enrollment IDs,

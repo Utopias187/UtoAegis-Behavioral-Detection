@@ -1781,3 +1781,20 @@ non-goals are documented in
 - Added valid-rollout, wrong-ring, authorization tamper, policy mismatch,
   expiration, inactive enrollment, malformed authorization, and package-shape
   tests. The complete suite now contains 354 passing tests.
+
+### Persisted revocation enforcement
+
+- Added one credential-processing path that verifies an enrollment-authority
+  signature, commits the credential through the durable anti-rollback store,
+  and only then permits active state to continue.
+- Persisted authenticated suspension or revocation before returning a
+  fail-closed result. Startup checks now reload durable state and reject missing,
+  inactive, or expired enrollment rather than trusting a prior in-memory value.
+- Changed rollout-policy verification to consume the durable enrollment
+  snapshot, so policy cannot be authorized through a stale credential after a
+  revocation was committed.
+- Retained terminal revocation: a higher-sequence credential cannot reactivate
+  the enrollment. Re-enrollment requires an explicit local reset rather than a
+  remote state transition.
+- Added persist-before-fail, restart, terminal-reactivation, and expiration
+  tests. The complete suite now contains 358 passing tests.

@@ -40,7 +40,7 @@ public sealed class SignedPolicyDistributionVerifier
 
     public async ValueTask<VerifiedPolicyDistribution> VerifyAsync(
         string packagePath,
-        VerifiedDeviceEnrollmentCredential enrollment,
+        DeviceEnrollmentStateSnapshot enrollment,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(packagePath);
@@ -79,7 +79,7 @@ public sealed class SignedPolicyDistributionVerifier
 
         var now = timeProvider.GetUtcNow();
         ValidateAuthorizationTime(authorization, now);
-        ValidateEnrollment(enrollment.Credential, authorization, now);
+        ValidateEnrollment(enrollment, authorization, now);
 
         var runtimePolicy = await runtimePolicyVerifier.VerifyAsync(
             Path.Combine(fullPath, PolicyDirectoryName),
@@ -146,7 +146,7 @@ public sealed class SignedPolicyDistributionVerifier
     }
 
     private void ValidateEnrollment(
-        DeviceEnrollmentCredential enrollment,
+        DeviceEnrollmentStateSnapshot enrollment,
         PolicyDistributionAuthorization authorization,
         DateTimeOffset now)
     {
@@ -156,17 +156,17 @@ public sealed class SignedPolicyDistributionVerifier
                 "Only an active device enrollment may accept distributed policy.");
         }
 
-        if (enrollment.IssuedUtc > now + clockSkew || enrollment.ExpiresUtc <= now - clockSkew)
+        if (enrollment.ExpiresUtc <= now - clockSkew)
         {
             throw new RuntimePolicyException(
                 "The device enrollment is outside its validity period.");
         }
 
         if (!authorization.AllowedRolloutRings.Any(ring =>
-                string.Equals(ring.Value, enrollment.RolloutRing.Value, StringComparison.Ordinal)))
+                string.Equals(ring.Value, enrollment.RolloutRing, StringComparison.Ordinal)))
         {
             throw new RuntimePolicyException(
-                $"Rollout ring '{enrollment.RolloutRing.Value}' is not authorized for this policy.");
+                $"Rollout ring '{enrollment.RolloutRing}' is not authorized for this policy.");
         }
     }
 

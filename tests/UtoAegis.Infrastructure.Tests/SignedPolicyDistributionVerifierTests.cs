@@ -140,7 +140,6 @@ public sealed class SignedPolicyDistributionVerifierTests
             async () => await CreateVerifier().VerifyAsync(
                 package,
                 CreateEnrollment(
-                    issuedUtc: Now.AddDays(-30),
                     expiresUtc: Now.AddHours(-1))));
 
         StringAssert.Contains(exception.Message, "enrollment is outside");
@@ -191,25 +190,22 @@ public sealed class SignedPolicyDistributionVerifierTests
             new FixedTimeProvider(Now));
     }
 
-    private static VerifiedDeviceEnrollmentCredential CreateEnrollment(
+    private static DeviceEnrollmentStateSnapshot CreateEnrollment(
         string ring = "canary",
         DeviceEnrollmentStatus status = DeviceEnrollmentStatus.Active,
-        DateTimeOffset? issuedUtc = null,
         DateTimeOffset? expiresUtc = null)
     {
-        var credential = new DeviceEnrollmentCredential(
+        return new DeviceEnrollmentStateSnapshot(
             3,
+            new string('c', 64),
             "enrollment-1",
             new string('a', 32),
             new string('b', 64),
-            new RolloutRing(ring),
+            ring,
             status,
             status == DeviceEnrollmentStatus.Revoked ? 1 : 0,
-            issuedUtc ?? Now.AddDays(-1),
             expiresUtc ?? Now.AddDays(30),
-            new Uri("https://management.example/"),
-            "enrollment-key-1");
-        return new VerifiedDeviceEnrollmentCredential(credential, new string('c', 64));
+            "https://management.example/");
     }
 
     private async Task<string> CreatePackageAsync(

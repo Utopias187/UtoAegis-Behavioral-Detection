@@ -687,7 +687,7 @@ a clean-file verdict.
 - [ ] Authenticate and replay-bind every management request.
 - [x] Consume one-time bootstrap credentials during enrollment.
 - [x] Enforce rollout-ring authorization on signed runtime policy.
-- [ ] Persist revocation generation and fail closed for revoked credentials.
+- [x] Persist revocation generation and fail closed for revoked credentials.
 - [ ] Add durable exact-policy acknowledgement and bounded fleet health.
 - [ ] Add Windows installation, recovery, rotation, and removal workflows.
 - [ ] Add integration tests, release packaging, and operator documentation.
