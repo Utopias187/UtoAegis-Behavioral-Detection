@@ -1836,3 +1836,20 @@ non-goals are documented in
 - Added canonicalization, privacy-bound, persistence, retry, confirmation,
   replacement, enrollment-binding, and malformed-state tests. The complete
   suite now contains 376 passing tests.
+
+### Windows identity lifecycle foundation
+
+- Separated identity creation from repair validation. Repair now requires both
+  strict persisted state and its matching non-exportable P-256 CNG key and will
+  never create a replacement for missing material.
+- Added explicit rotation and removal operations requiring the exact current
+  device ID. Both validate the state/key binding before changing anything.
+- Added same-volume atomic state retirement with reparse-point, filesystem-root,
+  pre-existing archive, wrong-device, and active-state replacement guards.
+  Retired state remains available as recovery and audit evidence.
+- Rotation deletes the old key only after state retirement, creates a fresh
+  random device ID and non-exportable key, and leaves the endpoint requiring
+  new enrollment. Removal archives state and deletes the named private key.
+- Added state retirement/restoration, wrong-device, repair-without-creation,
+  rotation, key replacement, and removal tests. The complete suite now contains
+  381 passing tests.

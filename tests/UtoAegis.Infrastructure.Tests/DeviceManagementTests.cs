@@ -166,6 +166,36 @@ public sealed class DeviceManagementTests
         StringAssert.Contains(exception.Message, "Duplicate JSON property");
     }
 
+    [TestMethod]
+    public async Task RetireAndRestoreAsync_ExactIdentity_RoundTripsState()
+    {
+        var store = CreateStore();
+        await store.CreateOrLoadAsync(identity);
+        var archive = Path.Combine(testDirectory, "archive", "identity.json");
+
+        var retired = await store.RetireAsync(identity.DeviceId, archive);
+        Assert.IsNull(await store.LoadAsync());
+        await store.RestoreRetiredAsync(archive, identity.DeviceId);
+
+        Assert.AreEqual(identity, retired);
+        Assert.AreEqual(identity, await store.LoadAsync());
+        Assert.IsFalse(File.Exists(archive));
+    }
+
+    [TestMethod]
+    public async Task RetireAsync_DifferentDevice_LeavesStateActive()
+    {
+        var store = CreateStore();
+        await store.CreateOrLoadAsync(identity);
+
+        await Assert.ThrowsExactlyAsync<DeviceManagementException>(
+            async () => await store.RetireAsync(
+                new string('f', 32),
+                Path.Combine(testDirectory, "archive", "identity.json")));
+
+        Assert.AreEqual(identity, await store.LoadAsync());
+    }
+
     private DeviceRequestSigner CreateSigner() => new(signingKey, identity);
 
     private SignedDeviceRequest CreateRequest(byte[] body) =>

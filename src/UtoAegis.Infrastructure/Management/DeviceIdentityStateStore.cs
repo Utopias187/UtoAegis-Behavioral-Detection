@@ -69,6 +69,109 @@ public sealed class DeviceIdentityStateStore
         CancellationToken cancellationToken = default) =>
         LoadCoreAsync(cancellationToken);
 
+    public async ValueTask<DeviceIdentityState> RetireAsync(
+        string expectedDeviceId,
+        string archivePath,
+        CancellationToken cancellationToken = default)
+    {
+        expectedDeviceId = NormalizeDeviceId(expectedDeviceId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(archivePath);
+        var fullArchivePath = Path.GetFullPath(archivePath);
+        if (string.Equals(fullArchivePath, statePath, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(
+                Path.GetPathRoot(fullArchivePath),
+                Path.GetPathRoot(statePath),
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException(
+                "The identity archive must be a different path on the same volume.",
+                nameof(archivePath));
+        }
+
+        var archiveParent = Path.GetDirectoryName(fullArchivePath)!;
+        if (Path.GetFullPath(archiveParent) == Path.GetPathRoot(archiveParent))
+        {
+            throw new ArgumentException(
+                "The identity archive must not be stored at a filesystem root.",
+                nameof(archivePath));
+        }
+
+        Directory.CreateDirectory(archiveParent);
+        var archiveDirectory = new DirectoryInfo(archiveParent);
+        archiveDirectory.Refresh();
+        if (archiveDirectory.Attributes.HasFlag(FileAttributes.ReparsePoint))
+        {
+            throw new DeviceManagementException(
+                "The identity archive directory must not be a reparse point.");
+        }
+
+        await using var operationLock = await AcquireLockAsync(
+            statePath + ".lock",
+            cancellationToken).ConfigureAwait(false);
+        var current = await LoadCoreAsync(cancellationToken).ConfigureAwait(false) ??
+            throw new DeviceManagementException("No device identity state is available to retire.");
+        if (!string.Equals(current.DeviceId, expectedDeviceId, StringComparison.Ordinal))
+        {
+            throw new DeviceManagementException(
+                "The expected device ID does not match the persisted identity.");
+        }
+
+        if (File.Exists(fullArchivePath))
+        {
+            throw new DeviceManagementException("The identity archive path already exists.");
+        }
+
+        try
+        {
+            File.Move(statePath, fullArchivePath, overwrite: false);
+            return current;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            throw new DeviceManagementException(
+                "The device identity state could not be archived atomically.",
+                exception);
+        }
+    }
+
+    public async ValueTask RestoreRetiredAsync(
+        string archivePath,
+        string expectedDeviceId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(archivePath);
+        expectedDeviceId = NormalizeDeviceId(expectedDeviceId);
+        var fullArchivePath = Path.GetFullPath(archivePath);
+        var archived = await new DeviceIdentityStateStore(fullArchivePath)
+            .LoadAsync(cancellationToken).ConfigureAwait(false) ??
+            throw new DeviceManagementException("The retired identity archive is missing.");
+        if (!string.Equals(archived.DeviceId, expectedDeviceId, StringComparison.Ordinal))
+        {
+            throw new DeviceManagementException(
+                "The retired identity archive belongs to a different device.");
+        }
+
+        await using var operationLock = await AcquireLockAsync(
+            statePath + ".lock",
+            cancellationToken).ConfigureAwait(false);
+        if (File.Exists(statePath))
+        {
+            throw new DeviceManagementException(
+                "Active identity state already exists and cannot be replaced by an archive.");
+        }
+
+        try
+        {
+            File.Move(fullArchivePath, statePath, overwrite: false);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            throw new DeviceManagementException(
+                "The retired device identity could not be restored atomically.",
+                exception);
+        }
+    }
+
     private async ValueTask<DeviceIdentityState?> LoadCoreAsync(CancellationToken cancellationToken)
     {
         var file = new FileInfo(statePath);
@@ -208,6 +311,21 @@ public sealed class DeviceIdentityStateStore
                 await Task.Delay(50, cancellationToken).ConfigureAwait(false);
             }
         }
+    }
+
+    private static string NormalizeDeviceId(string value)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(value);
+        if (value.Length != 32 || value.Any(character =>
+                !char.IsAsciiDigit(character) &&
+                character is not (>= 'a' and <= 'f') and not (>= 'A' and <= 'F')))
+        {
+            throw new ArgumentException(
+                "The expected device ID must contain exactly 32 hexadecimal characters.",
+                nameof(value));
+        }
+
+        return value.ToLowerInvariant();
     }
 
     private sealed record StateDocument(

@@ -86,6 +86,60 @@ public sealed class WindowsDeviceIdentityKeyStoreTests
         StringAssert.Contains(exception.Message, "explicit recovery");
     }
 
+    [TestMethod]
+    [SupportedOSPlatform("windows")]
+    public async Task ValidateAsync_MissingState_DoesNotCreateIdentity()
+    {
+        var exception = await Assert.ThrowsExactlyAsync<DeviceManagementException>(
+            async () => await keyStore.ValidateAsync(CreateStateStore()));
+
+        StringAssert.Contains(exception.Message, "will not create");
+        Assert.IsNull(await CreateStateStore().LoadAsync());
+    }
+
+    [TestMethod]
+    [SupportedOSPlatform("windows")]
+    public async Task RotateAsync_ExpectedIdentity_ArchivesAndReplacesKey()
+    {
+        var store = CreateStateStore();
+        string oldDeviceId;
+        byte[] oldPublicKey;
+        using (var current = await keyStore.CreateOrLoadAsync(store))
+        {
+            oldDeviceId = current.Identity.DeviceId;
+            oldPublicKey = current.SigningKey.ExportSubjectPublicKeyInfo();
+        }
+
+        var archive = Path.Combine(testDirectory, "archive", "retired.json");
+        using var rotated = await keyStore.RotateAsync(store, oldDeviceId, archive);
+
+        Assert.AreNotEqual(oldDeviceId, rotated.Identity.DeviceId);
+        CollectionAssert.AreNotEqual(oldPublicKey, rotated.SigningKey.ExportSubjectPublicKeyInfo());
+        Assert.IsTrue(File.Exists(archive));
+        Assert.AreEqual(oldDeviceId, (await new DeviceIdentityStateStore(archive).LoadAsync())!.DeviceId);
+    }
+
+    [TestMethod]
+    [SupportedOSPlatform("windows")]
+    public async Task RemoveAsync_ExpectedIdentity_ArchivesStateAndDeletesKey()
+    {
+        var store = CreateStateStore();
+        string deviceId;
+        using (var current = await keyStore.CreateOrLoadAsync(store))
+        {
+            deviceId = current.Identity.DeviceId;
+        }
+
+        var archive = Path.Combine(testDirectory, "archive", "removed.json");
+        var removed = await keyStore.RemoveAsync(store, deviceId, archive);
+
+        Assert.AreEqual(deviceId, removed.DeviceId);
+        Assert.IsNull(await store.LoadAsync());
+        Assert.IsTrue(File.Exists(archive));
+        await Assert.ThrowsExactlyAsync<DeviceManagementException>(
+            async () => await keyStore.ValidateAsync(store));
+    }
+
     private DeviceIdentityStateStore CreateStateStore() =>
         new(Path.Combine(testDirectory, "state", "identity.json"));
 }

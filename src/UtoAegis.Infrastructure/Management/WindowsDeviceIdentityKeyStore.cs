@@ -95,6 +95,93 @@ public sealed class WindowsDeviceIdentityKeyStore
         }
     }
 
+    public async ValueTask<DeviceIdentityKeyContext> ValidateAsync(
+        DeviceIdentityStateStore stateStore,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(stateStore);
+        var persisted = await stateStore.LoadAsync(cancellationToken).ConfigureAwait(false) ??
+            throw new DeviceManagementException(
+                "The persisted device identity is missing; repair will not create a replacement.");
+        if (!string.Equals(persisted.KeyName, keyName, StringComparison.Ordinal))
+        {
+            throw new DeviceManagementException(
+                "The persisted device identity references a different key.");
+        }
+
+        return OpenAndValidate(persisted);
+    }
+
+    public async ValueTask<DeviceIdentityKeyContext> RotateAsync(
+        DeviceIdentityStateStore stateStore,
+        string expectedDeviceId,
+        string archivePath,
+        TimeProvider? timeProvider = null,
+        CancellationToken cancellationToken = default)
+    {
+        using (var current = await ValidateAsync(stateStore, cancellationToken).ConfigureAwait(false))
+        {
+            EnsureExpectedDevice(current.Identity, expectedDeviceId);
+        }
+
+        var retired = await stateStore.RetireAsync(
+            expectedDeviceId,
+            archivePath,
+            cancellationToken).ConfigureAwait(false);
+        try
+        {
+            DeleteKey();
+            return await CreateOrLoadAsync(stateStore, timeProvider, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch
+        {
+            if (CngKey.Exists(keyName, Provider, openOptions))
+            {
+                await stateStore.RestoreRetiredAsync(
+                    archivePath,
+                    retired.DeviceId,
+                    CancellationToken.None).ConfigureAwait(false);
+            }
+
+            throw;
+        }
+    }
+
+    public async ValueTask<DeviceIdentityState> RemoveAsync(
+        DeviceIdentityStateStore stateStore,
+        string expectedDeviceId,
+        string archivePath,
+        CancellationToken cancellationToken = default)
+    {
+        using (var current = await ValidateAsync(stateStore, cancellationToken).ConfigureAwait(false))
+        {
+            EnsureExpectedDevice(current.Identity, expectedDeviceId);
+        }
+
+        var retired = await stateStore.RetireAsync(
+            expectedDeviceId,
+            archivePath,
+            cancellationToken).ConfigureAwait(false);
+        try
+        {
+            DeleteKey();
+            return retired;
+        }
+        catch
+        {
+            if (CngKey.Exists(keyName, Provider, openOptions))
+            {
+                await stateStore.RestoreRetiredAsync(
+                    archivePath,
+                    retired.DeviceId,
+                    CancellationToken.None).ConfigureAwait(false);
+            }
+
+            throw;
+        }
+    }
+
     internal void DeleteKey()
     {
         if (!CngKey.Exists(keyName, Provider, openOptions))
@@ -175,5 +262,29 @@ public sealed class WindowsDeviceIdentityKeyStore
         }
 
         return normalized;
+    }
+
+    private static void EnsureExpectedDevice(
+        DeviceIdentityState identity,
+        string expectedDeviceId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(expectedDeviceId);
+        try
+        {
+            if (expectedDeviceId.Length != 32 ||
+                !CryptographicOperations.FixedTimeEquals(
+                    Convert.FromHexString(identity.DeviceId),
+                    Convert.FromHexString(expectedDeviceId)))
+            {
+                throw new DeviceManagementException(
+                    "The expected device ID does not match the persisted identity.");
+            }
+        }
+        catch (FormatException exception)
+        {
+            throw new DeviceManagementException(
+                "The expected device ID is not valid hexadecimal data.",
+                exception);
+        }
     }
 }

@@ -58,6 +58,14 @@ personal identifier. The enrollment record stores:
 The state file contains no private key. Its directory receives a restricted ACL
 during installation, and every replacement is atomic and fail closed.
 
+Lifecycle operations distinguish creation from repair. Repair only validates an
+existing state/key pair and will not create a replacement if either side is
+missing. Rotation and removal require the exact current device ID and archive
+the validated state atomically on the same volume before deleting the old CNG
+key. A rotation creates a new random device ID and non-exportable key and
+therefore requires new enrollment; archived state is recovery evidence, not an
+active credential.
+
 ## Signed request envelope
 
 Every enrolled request signs canonical UTF-8 bytes containing:
