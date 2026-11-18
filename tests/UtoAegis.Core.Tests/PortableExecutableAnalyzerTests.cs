@@ -146,6 +146,7 @@ public sealed class PortableExecutableAnalyzerTests
             bytes.AsSpan(sectionTable + 20, 4));
         var third = sectionTable + 80;
         BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(third + 20, 4), firstRawOffset);
+        ClearDirectory(bytes, 5);
         var path = Path.Combine(testDirectory, "overlap.dll");
         await File.WriteAllBytesAsync(path, bytes);
 
@@ -170,6 +171,7 @@ public sealed class PortableExecutableAnalyzerTests
         var rawSize = BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(lastSection + 16, 4));
         var rawOffset = BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(lastSection + 20, 4));
         bytes.AsSpan(checked((int)rawOffset), checked((int)rawSize)).Clear();
+        ClearDirectory(bytes, 5);
         var path = Path.Combine(testDirectory, "zero-section.dll");
         await File.WriteAllBytesAsync(path, bytes);
 
@@ -300,6 +302,91 @@ public sealed class PortableExecutableAnalyzerTests
         Assert.AreEqual(PortableExecutableIssueCode.InvalidResourceTable, result.IssueCode);
     }
 
+    [TestMethod]
+    public async Task AnalyzeAsync_InjectedPlatformDirectories_ExtractsBoundedFacts()
+    {
+        var bytes = await LoadFixtureAsync();
+        var layout = GetLastSectionLayout(bytes);
+        var peOffset = BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(0x3c, 4));
+        BinaryPrimitives.WriteUInt16LittleEndian(bytes.AsSpan(peOffset + 4, 2), 0x8664);
+        bytes.AsSpan(layout.RawOffset, layout.RawSize).Clear();
+        var imageBase = GetPe32ImageBase(bytes);
+        var firstSectionRva = GetFirstSectionRva(bytes);
+
+        WriteUInt32(bytes, layout.RawOffset + 4, 1234);
+        WriteUInt16(bytes, layout.RawOffset + 8, 2);
+        WriteUInt16(bytes, layout.RawOffset + 10, 1);
+        WriteUInt32(bytes, layout.RawOffset + 12, 2);
+        WriteDirectory(bytes, layout, 6, layout.Rva, 28);
+
+        WriteUInt32(bytes, layout.RawOffset + 32, imageBase + firstSectionRva);
+        WriteUInt32(bytes, layout.RawOffset + 36, imageBase + firstSectionRva + 4);
+        WriteUInt32(bytes, layout.RawOffset + 40, imageBase + firstSectionRva);
+        WriteUInt32(bytes, layout.RawOffset + 44, imageBase + layout.Rva + 64);
+        WriteUInt32(bytes, layout.RawOffset + 64, imageBase + firstSectionRva);
+        WriteDirectory(bytes, layout, 9, layout.Rva + 32, 24);
+
+        WriteUInt32(bytes, layout.RawOffset + 80, 92);
+        WriteUInt32(bytes, layout.RawOffset + 84, 5678);
+        WriteUInt16(bytes, layout.RawOffset + 88, 3);
+        WriteUInt16(bytes, layout.RawOffset + 90, 4);
+        WriteUInt32(bytes, layout.RawOffset + 92, 1);
+        WriteUInt32(bytes, layout.RawOffset + 96, 2);
+        WriteUInt32(bytes, layout.RawOffset + 100, 30);
+        WriteUInt32(bytes, layout.RawOffset + 140, imageBase + firstSectionRva);
+        WriteUInt32(bytes, layout.RawOffset + 148, 2);
+        WriteUInt32(bytes, layout.RawOffset + 168, 0x100);
+        WriteDirectory(bytes, layout, 10, layout.Rva + 80, 92);
+
+        WriteUInt32(bytes, layout.RawOffset + 176, firstSectionRva);
+        WriteUInt32(bytes, layout.RawOffset + 180, 12);
+        WriteUInt16(bytes, layout.RawOffset + 184, 0x3004);
+        WriteDirectory(bytes, layout, 5, layout.Rva + 176, 12);
+
+        WriteUInt32(bytes, layout.RawOffset + 192, firstSectionRva);
+        WriteUInt32(bytes, layout.RawOffset + 196, firstSectionRva + 16);
+        WriteUInt32(bytes, layout.RawOffset + 200, firstSectionRva + 32);
+        WriteDirectory(bytes, layout, 3, layout.Rva + 192, 12);
+        var path = await WriteFixtureAsync("platform-directories.dll", bytes);
+
+        var result = await new PortableExecutableAnalyzer().AnalyzeAsync(path);
+
+        Assert.AreEqual(
+            PortableExecutableAnalysisStatus.Analyzed,
+            result.Status,
+            $"Issue: {result.IssueCode}");
+        Assert.HasCount(1, result.PlatformFacts.DebugEntries);
+        Assert.AreEqual(2u, result.PlatformFacts.DebugEntries[0].Type);
+        Assert.IsNotNull(result.PlatformFacts.Tls);
+        CollectionAssert.AreEqual(
+            new[] { firstSectionRva },
+            result.PlatformFacts.Tls.CallbackRvas.ToArray());
+        Assert.IsNotNull(result.PlatformFacts.LoadConfiguration);
+        Assert.AreEqual(0x100u, result.PlatformFacts.LoadConfiguration.GuardFlags);
+        Assert.HasCount(2, result.PlatformFacts.Relocations);
+        Assert.AreEqual((ushort)3, result.PlatformFacts.Relocations[0].Type);
+        Assert.IsNotNull(result.PlatformFacts.Exceptions);
+        Assert.HasCount(1, result.PlatformFacts.Exceptions.Entries);
+        Assert.AreEqual(firstSectionRva + 16, result.PlatformFacts.Exceptions.Entries[0].EndRva);
+    }
+
+    [TestMethod]
+    public async Task AnalyzeAsync_InvalidRelocationBlock_ReturnsMalformed()
+    {
+        var bytes = await LoadFixtureAsync();
+        var layout = GetLastSectionLayout(bytes);
+        bytes.AsSpan(layout.RawOffset, layout.RawSize).Clear();
+        WriteUInt32(bytes, layout.RawOffset, GetFirstSectionRva(bytes));
+        WriteUInt32(bytes, layout.RawOffset + 4, 16);
+        WriteDirectory(bytes, layout, 5, layout.Rva, 12);
+        var path = await WriteFixtureAsync("invalid-relocations.dll", bytes);
+
+        var result = await new PortableExecutableAnalyzer().AnalyzeAsync(path);
+
+        Assert.AreEqual(PortableExecutableAnalysisStatus.Malformed, result.Status);
+        Assert.AreEqual(PortableExecutableIssueCode.InvalidRelocationTable, result.IssueCode);
+    }
+
     private static int GetSectionTableOffset(byte[] bytes)
     {
         var peOffset = BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(0x3c, 4));
@@ -335,16 +422,27 @@ public sealed class PortableExecutableAnalyzerTests
         var rawSize = checked((int)BinaryPrimitives.ReadUInt32LittleEndian(
             bytes.AsSpan(section + 16, 4)));
         WriteUInt32(bytes, section + 8, checked((uint)rawSize));
-        return new PeFixtureLayout(
+        var layout = new PeFixtureLayout(
             optionalOffset + (isPe32Plus ? 112 : 96),
             checked((int)BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(section + 20, 4))),
             rawSize,
             BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(section + 12, 4)),
             isPe32Plus);
+        WriteDirectory(bytes, layout, 5, 0, 0);
+        return layout;
     }
 
     private static uint GetFirstSectionRva(byte[] bytes) =>
         BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(GetSectionTableOffset(bytes) + 12, 4));
+
+    private static uint GetPe32ImageBase(byte[] bytes)
+    {
+        var peOffset = BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(0x3c, 4));
+        var optionalOffset = peOffset + 24;
+        Assert.AreEqual((ushort)0x10b, BinaryPrimitives.ReadUInt16LittleEndian(
+            bytes.AsSpan(optionalOffset, 2)));
+        return BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(optionalOffset + 28, 4));
+    }
 
     private static void WriteDirectory(
         byte[] bytes,
@@ -358,11 +456,24 @@ public sealed class PortableExecutableAnalyzerTests
         WriteUInt32(bytes, offset + 4, size);
     }
 
+    private static void ClearDirectory(byte[] bytes, int index)
+    {
+        var peOffset = BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(0x3c, 4));
+        var optionalOffset = peOffset + 24;
+        var isPe32Plus = BinaryPrimitives.ReadUInt16LittleEndian(
+            bytes.AsSpan(optionalOffset, 2)) == 0x20b;
+        var offset = optionalOffset + (isPe32Plus ? 112 : 96) + (index * 8);
+        bytes.AsSpan(offset, 8).Clear();
+    }
+
     private static void WriteResourceDirectory(byte[] bytes, int offset, ushort idCount) =>
         BinaryPrimitives.WriteUInt16LittleEndian(bytes.AsSpan(offset + 14, 2), idCount);
 
     private static void WriteUInt32(byte[] bytes, int offset, uint value) =>
         BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(offset, 4), value);
+
+    private static void WriteUInt16(byte[] bytes, int offset, ushort value) =>
+        BinaryPrimitives.WriteUInt16LittleEndian(bytes.AsSpan(offset, 2), value);
 
     private static void WriteAscii(byte[] bytes, int offset, string value)
     {

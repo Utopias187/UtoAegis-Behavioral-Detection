@@ -173,9 +173,16 @@ public sealed class PortableExecutableAnalyzer
             }
 
             PortableExecutableDirectoryFacts directoryFacts;
+            PortableExecutablePlatformFacts platformFacts;
             try
             {
                 directoryFacts = PortableExecutableDirectoryReader.Read(reader, peHeader, options);
+                platformFacts = PortableExecutablePlatformReader.Read(
+                    reader,
+                    peHeader,
+                    header.Machine,
+                    openedLength,
+                    options);
             }
             catch (PortableExecutableDirectoryException exception)
             {
@@ -199,6 +206,7 @@ public sealed class PortableExecutableAnalyzer
                 header,
                 sections.Sections,
                 directoryFacts,
+                platformFacts,
                 PortableExecutableIssueCode.None);
         }
         catch (OperationCanceledException)
@@ -409,6 +417,7 @@ public sealed class PortableExecutableAnalyzer
             null,
             [],
             PortableExecutableDirectoryFacts.Empty,
+            PortableExecutablePlatformFacts.Empty,
             issueCode);
 
     private sealed record SectionReadResult(

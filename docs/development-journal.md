@@ -1951,3 +1951,18 @@ isolation.
 - Added real managed-import coverage and synthetic delay-import, export,
   resource, and cyclic-resource fixtures. The complete suite now contains 394
   passing tests.
+
+### Platform data-directory facts
+
+- Added bounded debug-directory records with versions, type, timestamps, data
+  locations, and file-range validation without loading debug payloads.
+- Added PE32 and PE32+ TLS extraction with VA-to-RVA normalization, raw-data
+  ranges, index and callback-table locations, and terminated callback traversal.
+- Added size-versioned load-configuration extraction for global flags, critical
+  section timeout, security-cookie RVA, SEH count, and guard flags.
+- Added checked relocation-block traversal and architecture-aware exception
+  records for AMD64, IA64, ARM, and ARM64, while retaining bounded directory
+  summaries for other machine types.
+- Added per-directory limits and stable issue codes plus positive combined and
+  malformed-relocation fixtures. The complete suite now contains 396 passing
+  tests.

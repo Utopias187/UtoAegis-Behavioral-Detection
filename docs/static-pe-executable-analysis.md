@@ -38,9 +38,10 @@ The report records file size, PE32/PE32+ format, target machine,
 timestamp, image characteristics, subsystem, DLL characteristics, image base,
 entry-point RVA, alignment values, image/header sizes, checksum, section count,
 data-directory count, bounded section layout and entropy, normal and delayed
-imports, exports, and resource identities. Later checkpoints add
-debug/TLS/load-configuration facts, managed metadata, certificate-table facts,
-and overlay measurements without changing that status model.
+imports, exports, resource identities, debug entries, TLS callbacks,
+load-configuration security fields, relocations, and architecture-aware
+exception records. Later checkpoints add managed metadata, certificate-table
+facts, and overlay measurements without changing that status model.
 
 ## Planned checkpoints
 

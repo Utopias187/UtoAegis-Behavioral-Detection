@@ -6,6 +6,7 @@ public sealed record PortableExecutableAnalysisResult(
     PortableExecutableHeader? Header,
     IReadOnlyList<PortableExecutableSection> Sections,
     PortableExecutableDirectoryFacts DirectoryFacts,
+    PortableExecutablePlatformFacts PlatformFacts,
     PortableExecutableIssueCode IssueCode)
 {
     public bool IsPortableExecutable => Status == PortableExecutableAnalysisStatus.Analyzed;

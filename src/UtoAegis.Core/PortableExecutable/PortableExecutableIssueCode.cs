@@ -23,5 +23,10 @@ public enum PortableExecutableIssueCode
     InvalidDelayImportTable = 18,
     InvalidExportTable = 19,
     InvalidResourceTable = 20,
-    DirectoryLimitExceeded = 21
+    DirectoryLimitExceeded = 21,
+    InvalidDebugDirectory = 22,
+    InvalidTlsDirectory = 23,
+    InvalidLoadConfiguration = 24,
+    InvalidRelocationTable = 25,
+    InvalidExceptionTable = 26
 }
