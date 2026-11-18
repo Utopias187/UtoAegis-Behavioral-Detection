@@ -713,7 +713,7 @@ a clean-file verdict.
 - [x] Define the verdict vocabulary, evidence contract, and trust boundary.
 - [x] Extract normalized, bounded PE risk features with stable identifiers.
 - [x] Add a versioned weighted policy, validation, and category caps.
-- [ ] Aggregate exact detectors and heuristics with explicit precedence.
+- [x] Aggregate exact detectors and heuristics with explicit precedence.
 - [ ] Integrate assessments into scanning, CLI, history, and telemetry.
 - [ ] Add calibration, determinism, and false-positive regression coverage.
 - [ ] Add release packaging, operator documentation, and CI verification.

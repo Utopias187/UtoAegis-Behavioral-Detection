@@ -2053,3 +2053,17 @@ response behavior. The complete baseline remains 409 passing .NET tests.
   capped, and applied totals so every score is reproducible and explainable.
 - Added policy validation, cap arithmetic, input-order determinism, and unknown
   feature tests. The complete suite now contains 421 passing tests.
+
+### Verdict aggregation and evidence precedence
+
+- Added the four-state `Inconclusive`, `NoKnownThreat`, `Review`, and
+  `Malicious` verdict vocabulary with an explicit confidence value and typed,
+  bounded evidence sources.
+- Preserved exact SHA-256 reputation and byte-signature detections as the
+  highest-precedence evidence. Exact matches remain malicious even if another
+  configured stage is incomplete; heuristic detections remain distinguishable.
+- Converted PE features into explainable contributions, made failed configured
+  stages inconclusive, and kept malformed or unsupported PE confidence below a
+  fully completed analysis.
+- Added precedence, threshold, confidence, exact-versus-heuristic, incomplete,
+  and clean-result tests. The complete suite now contains 427 passing tests.
