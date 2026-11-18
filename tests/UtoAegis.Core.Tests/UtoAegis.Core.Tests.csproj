@@ -11,5 +11,7 @@
   <ItemGroup>
     <Content Include="Fixtures/PortableExecutable/malformed-corpus.json"
              CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Fixtures/RiskScoring/calibration-corpus.json"
+             CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

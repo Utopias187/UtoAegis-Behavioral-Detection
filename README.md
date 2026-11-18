@@ -715,7 +715,7 @@ a clean-file verdict.
 - [x] Add a versioned weighted policy, validation, and category caps.
 - [x] Aggregate exact detectors and heuristics with explicit precedence.
 - [x] Integrate assessments into scanning, CLI, history, and telemetry.
-- [ ] Add calibration, determinism, and false-positive regression coverage.
+- [x] Add calibration, determinism, and false-positive regression coverage.
 - [ ] Add release packaging, operator documentation, and CI verification.
 
 ### Remaining product roadmap

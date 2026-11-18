@@ -1,0 +1,62 @@
+[
+  {
+    "id": "completed-no-features",
+    "expectedScore": 0,
+    "expectedVerdict": "NoKnownThreat",
+    "features": []
+  },
+  {
+    "id": "legacy-hardening-only",
+    "expectedScore": 8,
+    "expectedVerdict": "NoKnownThreat",
+    "features": [
+      { "id": "pe.hardening.no-aslr", "category": "Hardening", "strength": 100 },
+      { "id": "pe.hardening.no-nx", "category": "Hardening", "strength": 100 }
+    ]
+  },
+  {
+    "id": "isolated-network-capability",
+    "expectedScore": 3,
+    "expectedVerdict": "NoKnownThreat",
+    "features": [
+      { "id": "pe.imports.network", "category": "Network", "strength": 25 }
+    ]
+  },
+  {
+    "id": "independent-review-signals",
+    "expectedScore": 37,
+    "expectedVerdict": "Review",
+    "features": [
+      { "id": "pe.section.write-execute", "category": "Memory", "strength": 100 },
+      { "id": "pe.imports.network", "category": "Network", "strength": 100 }
+    ]
+  },
+  {
+    "id": "correlated-memory-signals-capped",
+    "expectedScore": 30,
+    "expectedVerdict": "NoKnownThreat",
+    "features": [
+      { "id": "pe.section.write-execute", "category": "Memory", "strength": 100 },
+      { "id": "pe.imports.process-injection", "category": "Memory", "strength": 100 }
+    ]
+  },
+  {
+    "id": "multi-category-high-risk",
+    "expectedScore": 100,
+    "expectedVerdict": "Malicious",
+    "features": [
+      { "id": "pe.section.raw-overlap", "category": "Structure", "strength": 100 },
+      { "id": "pe.section.write-execute", "category": "Memory", "strength": 100 },
+      { "id": "pe.imports.process-injection", "category": "Memory", "strength": 100 },
+      { "id": "pe.section.executable-high-entropy", "category": "Packing", "strength": 100 },
+      { "id": "pe.overlay.present", "category": "Packing", "strength": 100 },
+      { "id": "pe.entrypoint.writable", "category": "Execution", "strength": 100 },
+      { "id": "pe.imports.dynamic-resolution", "category": "Execution", "strength": 100 },
+      { "id": "pe.tls.callbacks", "category": "Execution", "strength": 100 },
+      { "id": "pe.imports.network", "category": "Network", "strength": 100 },
+      { "id": "pe.imports.persistence", "category": "Persistence", "strength": 100 },
+      { "id": "pe.hardening.no-aslr", "category": "Hardening", "strength": 100 },
+      { "id": "pe.hardening.no-nx", "category": "Hardening", "strength": 100 }
+    ]
+  }
+]

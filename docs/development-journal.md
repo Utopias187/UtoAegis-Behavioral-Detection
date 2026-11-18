@@ -2082,3 +2082,15 @@ response behavior. The complete baseline remains 409 passing .NET tests.
 - Preserved exact quarantine evidence and added policy-versioned evidence for
   heuristic detections. Scanner and history round-trip/migration coverage now
   accompany the 428-test suite.
+
+### Calibration and false-positive controls
+
+- Added a source-controlled calibration corpus covering clean completion,
+  legacy hardening, isolated network capability, review-level independent
+  signals, correlated-category caps, and a multi-category high-risk sample.
+- Locked default-policy scores, verdict boundaries, policy identity/version,
+  and byte-identical JSON output across feature permutations.
+- Added false-positive regressions for the real managed test assembly and
+  isolated common signals; neither can cross the review threshold alone.
+- Verified adversarial correlated memory evidence cannot escape its category
+  cap. The complete suite now contains 433 passing tests.
