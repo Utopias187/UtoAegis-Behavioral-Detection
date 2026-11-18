@@ -1936,3 +1936,18 @@ isolation.
 - Added real-assembly range/entropy checks plus synthetic out-of-file,
   overlapping-raw-section, and zero-entropy fixtures. The complete suite now
   contains 390 passing tests.
+
+### Bounded imports, exports, and resources
+
+- Added bounded traversal for normal and delay-load import descriptors, thunk
+  tables, named imports, ordinal imports, hints, module names, and terminators.
+- Added export-directory traversal with count validation, ordinal mapping,
+  optional names, target RVAs, and bounded forwarder strings.
+- Added a depth-bounded resource tree reader for type, name, language, data RVA,
+  size, and code page. Directory cycles, invalid offsets, oversized names,
+  truncated payload mappings, and configured count limits fail closed.
+- Preserved the original numeric values of existing public issue codes while
+  adding stable directory-specific failures and a shared limit-exceeded code.
+- Added real managed-import coverage and synthetic delay-import, export,
+  resource, and cyclic-resource fixtures. The complete suite now contains 394
+  passing tests.

@@ -172,6 +172,19 @@ public sealed class PortableExecutableAnalyzer
                     sections.IssueCode);
             }
 
+            PortableExecutableDirectoryFacts directoryFacts;
+            try
+            {
+                directoryFacts = PortableExecutableDirectoryReader.Read(reader, peHeader, options);
+            }
+            catch (PortableExecutableDirectoryException exception)
+            {
+                return Result(
+                    PortableExecutableAnalysisStatus.Malformed,
+                    openedLength,
+                    exception.IssueCode);
+            }
+
             if (stream.Length != openedLength)
             {
                 return Result(
@@ -185,6 +198,7 @@ public sealed class PortableExecutableAnalyzer
                 openedLength,
                 header,
                 sections.Sections,
+                directoryFacts,
                 PortableExecutableIssueCode.None);
         }
         catch (OperationCanceledException)
@@ -389,7 +403,13 @@ public sealed class PortableExecutableAnalyzer
         PortableExecutableAnalysisStatus status,
         long fileSizeBytes,
         PortableExecutableIssueCode issueCode) =>
-        new(status, fileSizeBytes, null, [], issueCode);
+        new(
+            status,
+            fileSizeBytes,
+            null,
+            [],
+            PortableExecutableDirectoryFacts.Empty,
+            issueCode);
 
     private sealed record SectionReadResult(
         IReadOnlyList<PortableExecutableSection> Sections,

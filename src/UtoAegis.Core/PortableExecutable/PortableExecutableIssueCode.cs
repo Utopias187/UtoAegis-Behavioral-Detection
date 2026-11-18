@@ -18,5 +18,10 @@ public enum PortableExecutableIssueCode
     VirtualRangeOutOfBounds = 13,
     InvalidAlignment = 14,
     FileChanged = 15,
-    IoFailure = 16
+    IoFailure = 16,
+    InvalidImportTable = 17,
+    InvalidDelayImportTable = 18,
+    InvalidExportTable = 19,
+    InvalidResourceTable = 20,
+    DirectoryLimitExceeded = 21
 }

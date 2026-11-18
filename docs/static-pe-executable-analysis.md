@@ -34,12 +34,13 @@ The analyzer distinguishes:
 - an unsafe or oversized input; and
 - an I/O failure or cancellation.
 
-The first report records file size, PE32/PE32+ format, target machine,
+The report records file size, PE32/PE32+ format, target machine,
 timestamp, image characteristics, subsystem, DLL characteristics, image base,
 entry-point RVA, alignment values, image/header sizes, checksum, section count,
-and data-directory count. Later checkpoints add sections, imports/exports,
-resources, debug/TLS/load-configuration facts, managed metadata, certificate
-table facts, and overlay measurements without changing that status model.
+data-directory count, bounded section layout and entropy, normal and delayed
+imports, exports, and resource identities. Later checkpoints add
+debug/TLS/load-configuration facts, managed metadata, certificate-table facts,
+and overlay measurements without changing that status model.
 
 ## Planned checkpoints
 

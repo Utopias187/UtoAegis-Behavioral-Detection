@@ -696,7 +696,7 @@ a clean-file verdict.
 
 - [x] Add bounded PE recognition and strict header extraction.
 - [x] Validate sections, ranges, overlaps, mappings, and entropy facts.
-- [ ] Traverse imports, delay imports, exports, and resources safely.
+- [x] Traverse imports, delay imports, exports, and resources safely.
 - [ ] Extract debug, TLS, load-configuration, relocation, and exception facts.
 - [ ] Add managed metadata, certificate-table facts, and overlay analysis.
 - [ ] Integrate PE facts into scanning, CLI JSON, history, and telemetry.
