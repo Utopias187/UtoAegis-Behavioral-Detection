@@ -2140,3 +2140,18 @@ the existing 433-test baseline.
   degraded provider-health event after overflow capacity returns.
 - Added eight contract, validation, identity, sequence, overflow, and bound
   tests. The complete suite now contains 441 passing tests.
+
+### Windows provider normalization boundary
+
+- Added typed Windows provider records for process lifecycle, image loads,
+  attributable file and registry changes, network connections, and provider
+  health without accepting formatted event messages.
+- Added a generation-scoped process map keyed by process ID plus provider start
+  marker, deterministic oldest-entry eviction at 4,096 processes, and exact
+  parent/target resolution that remains safe across PID reuse.
+- Replaced executable, module, and file paths with stable SHA-256 path tokens;
+  reduced registry keys to approved persistence/location classes and IP
+  addresses to loopback, private, link-local, public, or unknown scope.
+- Added nine privacy, determinism, process identity, registry, network, invalid
+  enum, and malformed-provider tests. The complete suite now contains 450
+  passing tests.

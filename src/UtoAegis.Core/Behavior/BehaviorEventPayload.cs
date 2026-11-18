@@ -58,6 +58,11 @@ public sealed record FileChangedPayload : BehaviorEventPayload
 {
     public FileChangedPayload(string pathToken, BehaviorOperation operation)
     {
+        if (!Enum.IsDefined(operation))
+        {
+            throw new ArgumentOutOfRangeException(nameof(operation));
+        }
+
         Artifact = new BehaviorArtifactIdentity(pathToken, null);
         Operation = operation;
     }
@@ -81,6 +86,11 @@ public sealed record NetworkConnectedPayload : BehaviorEventPayload
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(destinationPort, 1);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(destinationPort, 65_535);
+        if (!Enum.IsDefined(protocol) || !Enum.IsDefined(direction) || !Enum.IsDefined(addressScope))
+        {
+            throw new ArgumentOutOfRangeException(nameof(protocol));
+        }
+
         Protocol = protocol;
         Direction = direction;
         AddressScope = addressScope;
@@ -104,6 +114,11 @@ public sealed record ProviderHealthPayload : BehaviorEventPayload
         long droppedEventCount)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(droppedEventCount);
+        if (!Enum.IsDefined(provider) || !Enum.IsDefined(state))
+        {
+            throw new ArgumentOutOfRangeException(nameof(provider));
+        }
+
         Provider = provider;
         State = state;
         DroppedEventCount = droppedEventCount;

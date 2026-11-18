@@ -25,6 +25,11 @@ public sealed record BehaviorEvent
         ArgumentOutOfRangeException.ThrowIfNotEqual(schemaVersion, CurrentSchemaVersion);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(sequence);
         ArgumentNullException.ThrowIfNull(payload);
+        if (!Enum.IsDefined(source) || !Enum.IsDefined(kind))
+        {
+            throw new ArgumentOutOfRangeException(nameof(kind));
+        }
+
         ValidatePayload(kind, payload);
         if (kind != BehaviorEventKind.ProviderHealth && subject is null)
         {
@@ -77,13 +82,25 @@ public sealed record BehaviorEvent
     {
         var valid = kind switch
         {
-            BehaviorEventKind.ProcessStarted => payload is ProcessStartedPayload,
+            BehaviorEventKind.ProcessStarted => payload is ProcessStartedPayload
+            {
+                Executable: not null
+            } started && Enum.IsDefined(started.Integrity),
             BehaviorEventKind.ProcessStopped => payload is ProcessStoppedPayload,
-            BehaviorEventKind.ImageLoaded => payload is ImageLoadedPayload,
-            BehaviorEventKind.FileChanged => payload is FileChangedPayload,
-            BehaviorEventKind.RegistryChanged => payload is RegistryChangedPayload,
-            BehaviorEventKind.NetworkConnected => payload is NetworkConnectedPayload,
-            BehaviorEventKind.ProviderHealth => payload is ProviderHealthPayload,
+            BehaviorEventKind.ImageLoaded => payload is ImageLoadedPayload
+            {
+                Image: not null
+            } image && Enum.IsDefined(image.SignatureState),
+            BehaviorEventKind.FileChanged => payload is FileChangedPayload file &&
+                Enum.IsDefined(file.Operation),
+            BehaviorEventKind.RegistryChanged => payload is RegistryChangedPayload registry &&
+                Enum.IsDefined(registry.Location) && Enum.IsDefined(registry.Operation),
+            BehaviorEventKind.NetworkConnected => payload is NetworkConnectedPayload network &&
+                Enum.IsDefined(network.Protocol) &&
+                Enum.IsDefined(network.Direction) &&
+                Enum.IsDefined(network.AddressScope),
+            BehaviorEventKind.ProviderHealth => payload is ProviderHealthPayload health &&
+                Enum.IsDefined(health.Provider) && Enum.IsDefined(health.State),
             _ => false
         };
         if (!valid)
