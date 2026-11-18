@@ -57,7 +57,41 @@ summary for each file and migrates existing version 1 databases transactionally.
 Service detection telemetry includes the same compact PE identity without
 including unbounded names or directory contents.
 
-## Planned checkpoints
+## Operator use
+
+Run a normal file or directory scan. No separate PE-analysis switch is needed:
+
+```powershell
+dotnet run --project src/UtoAegis.Cli -- scan --json -- .\sample.exe
+```
+
+Interpret `portableExecutable.status` before reading facts. `Analyzed` means the
+bounded structural report completed; it does not mean the file is safe.
+`NotPortableExecutable` is expected for ordinary files. `Malformed`,
+`Unsupported`, `UnsafeInput`, and `IoError` retain a stable `issueCode` for
+automation and investigation.
+
+Imports, exports, resource names, entropy, managed identity, debug information,
+certificate presence, and overlay size are observations only. Do not quarantine
+or allow a file from any single field. Milestone 17 combines multiple facts into
+an explainable score.
+
+The default limits are 512 MiB per file, 96 sections, 8,192 imports and exports,
+4,096 resources, 128 debug entries, 256 TLS callbacks, 131,072 relocations,
+65,536 exception records, one million selected metadata rows, 64 certificates,
+and 16 MiB of certificate data. Library callers can lower these limits with
+`PortableExecutableAnalyzerOptions`.
+
+## Regression corpus
+
+`tests/UtoAegis.Core.Tests/Fixtures/PortableExecutable/malformed-corpus.json`
+drives deterministic mutations covering delay imports, exports, resources,
+debug, TLS, load configuration, relocations, exception records, and certificate
+tables. Corpus cases must return their stable issue code without crashing or
+allocating from untrusted counts. The release package includes this guide, and
+CI enforces both the corpus contract and packaging entry.
+
+## Completed checkpoints
 
 1. Bounded PE recognition, status model, and strict header extraction.
 2. Section mapping, range validation, overlap detection, and entropy facts.

@@ -706,7 +706,7 @@ a clean-file verdict.
 - [x] Extract debug, TLS, load-configuration, relocation, and exception facts.
 - [x] Add managed metadata, certificate-table facts, and overlay analysis.
 - [x] Integrate PE facts into scanning, CLI JSON, history, and telemetry.
-- [ ] Add malformed corpus, regression coverage, packaging, and documentation.
+- [x] Add malformed corpus, regression coverage, packaging, and documentation.
 
 ### Remaining product roadmap
 

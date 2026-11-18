@@ -70,6 +70,7 @@ jobs:
           ./tests/release/ReleaseMetadata.Tests.ps1
           ./tests/release/DeploymentPlan.Tests.ps1
           ./tests/release/EnrollmentPackaging.Tests.ps1
+          ./tests/release/PortableExecutablePackaging.Tests.ps1
 
       - name: Test endpoint enrollment lifecycle
         shell: pwsh

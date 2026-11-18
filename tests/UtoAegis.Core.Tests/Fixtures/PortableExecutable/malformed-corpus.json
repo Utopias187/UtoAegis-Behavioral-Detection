@@ -1,0 +1,11 @@
+[
+  { "name": "invalid-delay-attributes", "expectedIssue": "InvalidDelayImportTable" },
+  { "name": "excessive-export-count", "expectedIssue": "DirectoryLimitExceeded" },
+  { "name": "resource-cycle", "expectedIssue": "InvalidResourceTable" },
+  { "name": "misaligned-debug-directory", "expectedIssue": "InvalidDebugDirectory" },
+  { "name": "unterminated-tls-callbacks", "expectedIssue": "InvalidTlsDirectory" },
+  { "name": "oversized-load-config", "expectedIssue": "InvalidLoadConfiguration" },
+  { "name": "relocation-block-overrun", "expectedIssue": "InvalidRelocationTable" },
+  { "name": "misaligned-exception-table", "expectedIssue": "InvalidExceptionTable" },
+  { "name": "truncated-certificate", "expectedIssue": "InvalidCertificateTable" }
+]

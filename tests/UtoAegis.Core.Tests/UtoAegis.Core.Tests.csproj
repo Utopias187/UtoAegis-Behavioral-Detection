@@ -8,4 +8,8 @@
     <PackageReference Include="MSTest" />
     <ProjectReference Include="../../src/UtoAegis.Core/UtoAegis.Core.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <Content Include="Fixtures/PortableExecutable/malformed-corpus.json"
+             CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

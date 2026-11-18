@@ -1995,3 +1995,21 @@ isolation.
 - Added scanner attachment and history migration/round-trip tests, then
   exercised the built CLI against a managed assembly. The complete suite now
   contains 400 passing tests.
+
+### Malformed corpus, release packaging, and completion
+
+- Added a data-driven malformed PE corpus covering delay-import attributes,
+  export count exhaustion, resource cycles, debug alignment, unterminated TLS
+  callbacks, load-configuration sizing, relocation overruns, exception-table
+  alignment, and truncated certificates. Every case fails closed with its
+  stable issue code.
+- Added the static PE analysis guide to both Windows release architectures and
+  a packaging contract test. CI now runs that contract beside release metadata,
+  deployment-plan, and enrollment packaging verification.
+- Expanded operator documentation with CLI usage, status interpretation,
+  verdict-neutrality guidance, default limits, and corpus maintenance rules.
+- Verified formatting, the complete 409-test .NET suite, PowerShell parsing and
+  release packaging, locked dependency restore, and the vulnerability report.
+- Milestone 16 is complete. Static PE facts are ready as bounded evidence for
+  Milestone 17 explainable risk scoring; they do not independently assign a
+  malware verdict.

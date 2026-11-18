@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Text.Json;
 using UtoAegis.Core.PortableExecutable;
 
 namespace UtoAegis.Core.Tests;
@@ -6,7 +7,30 @@ namespace UtoAegis.Core.Tests;
 [TestClass]
 public sealed class PortableExecutableAnalyzerTests
 {
+    private static readonly JsonSerializerOptions CorpusJsonOptions =
+        new(JsonSerializerDefaults.Web);
+
     private string testDirectory = null!;
+
+    public static IEnumerable<object[]> MalformedCorpus
+    {
+        get
+        {
+            var path = Path.Combine(
+                AppContext.BaseDirectory,
+                "Fixtures",
+                "PortableExecutable",
+                "malformed-corpus.json");
+            var cases = JsonSerializer.Deserialize<MalformedCorpusCase[]>(
+                File.ReadAllText(path),
+                CorpusJsonOptions) ?? [];
+            return cases.Select(testCase => new object[]
+            {
+                testCase.Name,
+                Enum.Parse<PortableExecutableIssueCode>(testCase.ExpectedIssue)
+            });
+        }
+    }
 
     [TestInitialize]
     public void Initialize()
@@ -435,6 +459,21 @@ public sealed class PortableExecutableAnalyzerTests
         Assert.AreEqual(5L, result.ImageFacts.Overlay.OverlaySize);
     }
 
+    [TestMethod]
+    [DynamicData(nameof(MalformedCorpus))]
+    public async Task AnalyzeAsync_MalformedCorpus_FailsClosed(
+        string mutation,
+        PortableExecutableIssueCode expectedIssue)
+    {
+        var bytes = ApplyMalformedCorpusMutation(mutation, await LoadFixtureAsync());
+        var path = await WriteFixtureAsync(mutation + ".dll", bytes);
+
+        var result = await new PortableExecutableAnalyzer().AnalyzeAsync(path);
+
+        Assert.AreEqual(PortableExecutableAnalysisStatus.Malformed, result.Status);
+        Assert.AreEqual(expectedIssue, result.IssueCode);
+    }
+
     private static int GetSectionTableOffset(byte[] bytes)
     {
         var peOffset = BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(0x3c, 4));
@@ -492,6 +531,65 @@ public sealed class PortableExecutableAnalyzerTests
         return BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(optionalOffset + 28, 4));
     }
 
+    private static byte[] ApplyMalformedCorpusMutation(string mutation, byte[] bytes)
+    {
+        var layout = GetLastSectionLayout(bytes);
+        bytes.AsSpan(layout.RawOffset, layout.RawSize).Clear();
+        switch (mutation)
+        {
+            case "invalid-delay-attributes":
+                WriteUInt32(bytes, layout.RawOffset, 2);
+                WriteDirectory(bytes, layout, 13, layout.Rva, 64);
+                break;
+            case "excessive-export-count":
+                WriteUInt32(bytes, layout.RawOffset + 20, 8_193);
+                WriteDirectory(bytes, layout, 0, layout.Rva, 40);
+                break;
+            case "resource-cycle":
+                WriteResourceDirectory(bytes, layout.RawOffset, 1);
+                WriteUInt32(bytes, layout.RawOffset + 16, 10);
+                WriteUInt32(bytes, layout.RawOffset + 20, 0x80000000);
+                WriteDirectory(bytes, layout, 2, layout.Rva, 24);
+                break;
+            case "misaligned-debug-directory":
+                WriteDirectory(bytes, layout, 6, layout.Rva, 29);
+                break;
+            case "unterminated-tls-callbacks":
+                bytes.AsSpan(layout.RawOffset + 64, layout.RawSize - 64).Fill(0xff);
+                WriteUInt32(
+                    bytes,
+                    layout.RawOffset + 12,
+                    GetPe32ImageBase(bytes) + layout.Rva + 64);
+                WriteDirectory(bytes, layout, 9, layout.Rva, 24);
+                break;
+            case "oversized-load-config":
+                WriteUInt32(bytes, layout.RawOffset, 92);
+                WriteDirectory(bytes, layout, 10, layout.Rva, 24);
+                break;
+            case "relocation-block-overrun":
+                WriteUInt32(bytes, layout.RawOffset, GetFirstSectionRva(bytes));
+                WriteUInt32(bytes, layout.RawOffset + 4, 16);
+                WriteDirectory(bytes, layout, 5, layout.Rva, 12);
+                break;
+            case "misaligned-exception-table":
+                var peOffset = BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(0x3c, 4));
+                WriteUInt16(bytes, peOffset + 4, 0x8664);
+                WriteDirectory(bytes, layout, 3, layout.Rva, 10);
+                break;
+            case "truncated-certificate":
+                var expanded = new byte[bytes.Length + 8];
+                bytes.CopyTo(expanded, 0);
+                WriteUInt32(expanded, bytes.Length, 7);
+                WriteDirectory(expanded, 4, checked((uint)bytes.Length), 8);
+                bytes = expanded;
+                break;
+            default:
+                throw new InvalidOperationException($"Unknown malformed PE mutation: {mutation}");
+        }
+
+        return bytes;
+    }
+
     private static void WriteDirectory(
         byte[] bytes,
         PeFixtureLayout layout,
@@ -547,4 +645,6 @@ public sealed class PortableExecutableAnalyzerTests
         int RawSize,
         uint Rva,
         bool IsPe32Plus);
+
+    private sealed record MalformedCorpusCase(string Name, string ExpectedIssue);
 }
