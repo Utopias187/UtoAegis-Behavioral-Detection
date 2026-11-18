@@ -1,13 +1,16 @@
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using UtoAegis.Core.History;
+using UtoAegis.Core.Behavior;
 using UtoAegis.Core.Monitoring;
 using UtoAegis.Core.PortableExecutable;
 using UtoAegis.Core.Reputation;
 using UtoAegis.Core.Response;
+using UtoAegis.Core.RiskScoring;
 using UtoAegis.Core.Scanning;
 using UtoAegis.Core.Signatures;
 using UtoAegis.Infrastructure.History;
+using UtoAegis.Infrastructure.Behavior;
 using UtoAegis.Infrastructure.Monitoring;
 using UtoAegis.Infrastructure.Quarantine;
 using UtoAegis.Infrastructure.Reputation;
@@ -30,6 +33,8 @@ internal sealed class ServiceWorker(
         ServiceThreatContentReloader? contentReloader = null;
         SecurityTelemetrySpool? telemetrySpool = null;
         SecurityTelemetryWriter? securityTelemetry = null;
+        Task? behaviorTask = null;
+        CancellationTokenSource? behaviorCancellation = null;
         var monitorRunId = Guid.NewGuid().ToString("N");
         try
         {
@@ -101,6 +106,12 @@ internal sealed class ServiceWorker(
             }
 
             var historyStore = await CreateHistoryStoreAsync(stoppingToken);
+            SqliteBehaviorHistoryStore? behaviorHistoryStore = null;
+            if (configuration.BehaviorEnabled)
+            {
+                behaviorHistoryStore = new SqliteBehaviorHistoryStore(configuration.BehaviorHistoryPath!);
+                await behaviorHistoryStore.InitializeAsync(stoppingToken);
+            }
             if (configuration.ResponsePolicy.Mode == ResponseMode.Quarantine)
             {
                 quarantineStore = new FileSystemQuarantineStore(configuration.VaultPath!);
@@ -162,9 +173,19 @@ internal sealed class ServiceWorker(
             var monitorTask = monitoringEngine
                 .RunAsync(configuration.MonitorRoot, eventSource, stoppingToken)
                 .AsTask();
+            if (behaviorHistoryStore is not null)
+            {
+                behaviorCancellation = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+                behaviorTask = RunBehaviorAsync(
+                    behaviorHistoryStore,
+                    securityTelemetry,
+                    monitorRunId,
+                    behaviorCancellation.Token);
+            }
+
             var nextHealthUtc = DateTimeOffset.UtcNow + configuration.HealthInterval;
             var nextReloadUtc = DateTimeOffset.UtcNow + configuration.ContentReloadInterval;
-            while (!monitorTask.IsCompleted)
+            while (!monitorTask.IsCompleted && (behaviorTask is null || !behaviorTask.IsCompleted))
             {
                 var nextActionUtc = contentReloader is null || nextHealthUtc <= nextReloadUtc
                     ? nextHealthUtc
@@ -173,7 +194,10 @@ internal sealed class ServiceWorker(
                 var delay = Task.Delay(
                     delayDuration <= TimeSpan.Zero ? TimeSpan.Zero : delayDuration,
                     stoppingToken);
-                if (await Task.WhenAny(monitorTask, delay) == monitorTask)
+                var completedTask = behaviorTask is null
+                    ? await Task.WhenAny(monitorTask, delay)
+                    : await Task.WhenAny(monitorTask, behaviorTask, delay);
+                if (completedTask == monitorTask || completedTask == behaviorTask)
                 {
                     break;
                 }
@@ -216,6 +240,13 @@ internal sealed class ServiceWorker(
                 }
             }
 
+            if (behaviorTask is { IsCompleted: true } && !monitorTask.IsCompleted)
+            {
+                await behaviorTask;
+                throw new InvalidOperationException("Behavior monitoring stopped unexpectedly.");
+            }
+
+            behaviorCancellation?.Cancel();
             var summary = await monitorTask;
             await WriteHealthAsync(
                 sink.Snapshot(),
@@ -257,6 +288,20 @@ internal sealed class ServiceWorker(
         }
         finally
         {
+            behaviorCancellation?.Cancel();
+            if (behaviorTask is not null)
+            {
+                try
+                {
+                    await behaviorTask;
+                }
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                {
+                }
+            }
+
+            behaviorCancellation?.Dispose();
+
             contentReloader?.Dispose();
             quarantineStore?.Dispose();
             if (securityTelemetry is not null)
@@ -266,6 +311,79 @@ internal sealed class ServiceWorker(
             else
             {
                 telemetrySpool?.Dispose();
+            }
+        }
+    }
+
+    private async Task RunBehaviorAsync(
+        SqliteBehaviorHistoryStore historyStore,
+        SecurityTelemetryWriter? securityTelemetry,
+        string runId,
+        CancellationToken cancellationToken)
+    {
+        using var pipeline = new WindowsBehaviorDetectionPipeline(
+            configuration.BehaviorQueueCapacity);
+        var source = new WindowsProcessSnapshotSource(configuration.BehaviorPollInterval);
+        ServiceLog.BehaviorMonitoringStarted(
+            logger,
+            pipeline.CollectorGenerationId,
+            configuration.BehaviorPollInterval.TotalMilliseconds);
+        await TryWriteTelemetryAsync(
+            securityTelemetry,
+            "behavior.started",
+            runId,
+            new
+            {
+                pipeline.CollectorGenerationId,
+                queueCapacity = configuration.BehaviorQueueCapacity,
+                pollIntervalMilliseconds = configuration.BehaviorPollInterval.TotalMilliseconds,
+                responseMode = configuration.ResponsePolicy.Mode.ToString()
+            },
+            cancellationToken);
+
+        await foreach (var record in source.ReadAllAsync(cancellationToken))
+        {
+            foreach (var assessment in pipeline.Process(record).Where(item =>
+                         item.Verdict != RiskVerdict.NoKnownThreat))
+            {
+                var history = BehaviorHistoryRecord.FromAssessment(
+                    Guid.NewGuid(),
+                    DateTimeOffset.UtcNow,
+                    assessment);
+                await historyStore.AppendAsync(history, cancellationToken);
+                var responseDisposition = assessment.IsDetection
+                    ? configuration.ResponsePolicy.Mode == ResponseMode.ObserveOnly
+                        ? "observe-only"
+                        : "deferred-until-artifact-verification"
+                    : "none";
+                ServiceLog.BehaviorAssessment(
+                    logger,
+                    assessment.Subject!.Value.ProcessId,
+                    assessment.Verdict,
+                    assessment.Score,
+                    assessment.Confidence,
+                    responseDisposition);
+                await TryWriteTelemetryAsync(
+                    securityTelemetry,
+                    "behavior.assessment",
+                    history.Id.ToString("N"),
+                    new
+                    {
+                        collectorGenerationId = history.CollectorGenerationId,
+                        history.ProcessId,
+                        history.ProcessStartSequence,
+                        verdict = history.Verdict.ToString(),
+                        history.Score,
+                        history.Confidence,
+                        providerState = history.ProviderState.ToString(),
+                        history.PolicyId,
+                        history.PolicyVersion,
+                        history.EventCount,
+                        history.FeatureIds,
+                        history.Categories,
+                        responseDisposition
+                    },
+                    cancellationToken);
             }
         }
     }

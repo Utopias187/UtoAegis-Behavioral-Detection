@@ -82,6 +82,48 @@ public sealed class ServiceConfigurationTests
         Assert.IsTrue(result.Recursive);
         Assert.IsTrue(result.RunInitialScan);
         Assert.AreEqual(TimeSpan.FromSeconds(30), result.ContentReloadInterval);
+        Assert.IsFalse(result.BehaviorEnabled);
+        Assert.AreEqual(1_024, result.BehaviorQueueCapacity);
+        Assert.AreEqual(TimeSpan.FromSeconds(1), result.BehaviorPollInterval);
+    }
+
+    [TestMethod]
+    public void Load_BehaviorEnabledWithoutHistory_Throws()
+    {
+        var configuration = BuildConfiguration(new Dictionary<string, string?>
+        {
+            ["UtoAegis:MonitorRoot"] = monitorRoot,
+            ["UtoAegis:DatabasePath"] = "state/reputation.db",
+            ["UtoAegis:Behavior:Enabled"] = "true"
+        });
+
+        var exception = Assert.ThrowsExactly<ServiceConfigurationException>(() =>
+            ServiceConfiguration.Load(configuration, testDirectory));
+
+        StringAssert.Contains(exception.Message, "Behavior:HistoryPath");
+    }
+
+    [TestMethod]
+    public void Load_BehaviorConfiguration_ValidatesAndExcludesHistory()
+    {
+        var behaviorHistory = Path.Combine(testDirectory + "-behavior", "history.db");
+        var configuration = BuildConfiguration(new Dictionary<string, string?>
+        {
+            ["UtoAegis:MonitorRoot"] = monitorRoot,
+            ["UtoAegis:DatabasePath"] = "state/reputation.db",
+            ["UtoAegis:Behavior:Enabled"] = "true",
+            ["UtoAegis:Behavior:HistoryPath"] = behaviorHistory,
+            ["UtoAegis:Behavior:QueueCapacity"] = "512",
+            ["UtoAegis:Behavior:PollIntervalMilliseconds"] = "750"
+        });
+
+        var result = ServiceConfiguration.Load(configuration, testDirectory);
+
+        Assert.IsTrue(result.BehaviorEnabled);
+        Assert.AreEqual(behaviorHistory, result.BehaviorHistoryPath);
+        Assert.AreEqual(512, result.BehaviorQueueCapacity);
+        Assert.AreEqual(TimeSpan.FromMilliseconds(750), result.BehaviorPollInterval);
+        CollectionAssert.Contains(result.OperationalExclusions.ToArray(), behaviorHistory);
     }
 
     [TestMethod]

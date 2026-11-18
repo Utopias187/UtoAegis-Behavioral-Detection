@@ -2170,3 +2170,20 @@ the existing 433-test baseline.
 - Added nine clean, review, malicious, degraded, unreliable, ordering,
   process-isolation, and window-boundary tests. The complete suite now contains
   459 passing tests.
+
+### Service, history, telemetry, and response integration
+
+- Added a live coordinator that bounds per-process windows, retains at most 64
+  provider-health events, closes stopped processes, and rejects out-of-order or
+  cross-generation input.
+- Added an opt-in Windows process snapshot source and end-to-end provider
+  pipeline. Process executable paths are tokenized before correlation and the
+  source emits only lifecycle and main-image facts it can read safely.
+- Added a separately owned SQLite behavioral-history schema containing only
+  assessment summaries, feature IDs, category points, policy identity, provider
+  health, and process-instance identity—never raw activity or paths.
+- Added validated service settings, history exclusions, Event Log summaries,
+  and privacy-bounded tamper-evident telemetry. Behavioral detections respect
+  response mode but defer quarantine until an artifact is safely verified.
+- Added eleven coordinator, snapshot, pipeline, persistence, migration, and
+  configuration tests. The complete suite now contains 470 passing tests.

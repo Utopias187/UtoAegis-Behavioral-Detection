@@ -3,6 +3,8 @@ using Microsoft.Extensions.Configuration;
 using UtoAegis.Core.Monitoring;
 using UtoAegis.Core.Response;
 using UtoAegis.Core.Scanning;
+using UtoAegis.Core.Behavior;
+using UtoAegis.Infrastructure.Behavior;
 using UtoAegis.Infrastructure.Monitoring;
 using UtoAegis.Infrastructure.RuntimeIntegrity;
 
@@ -37,6 +39,10 @@ public sealed class ServiceConfiguration
         TimeSpan debounceDelay,
         TimeSpan healthInterval,
         TimeSpan contentReloadInterval,
+        bool behaviorEnabled,
+        string? behaviorHistoryPath,
+        int behaviorQueueCapacity,
+        TimeSpan behaviorPollInterval,
         ResponsePolicy responsePolicy)
     {
         MonitorRoot = monitorRoot;
@@ -60,6 +66,10 @@ public sealed class ServiceConfiguration
         DebounceDelay = debounceDelay;
         HealthInterval = healthInterval;
         ContentReloadInterval = contentReloadInterval;
+        BehaviorEnabled = behaviorEnabled;
+        BehaviorHistoryPath = behaviorHistoryPath;
+        BehaviorQueueCapacity = behaviorQueueCapacity;
+        BehaviorPollInterval = behaviorPollInterval;
         ResponsePolicy = responsePolicy;
     }
 
@@ -107,6 +117,14 @@ public sealed class ServiceConfiguration
 
     public TimeSpan ContentReloadInterval { get; }
 
+    public bool BehaviorEnabled { get; }
+
+    public string? BehaviorHistoryPath { get; }
+
+    public int BehaviorQueueCapacity { get; }
+
+    public TimeSpan BehaviorPollInterval { get; }
+
     public ResponsePolicy ResponsePolicy { get; private set; }
 
     public IReadOnlyCollection<string> OperationalExclusions
@@ -126,6 +144,13 @@ public sealed class ServiceConfiguration
                 paths.Add(HistoryPath);
                 paths.Add(HistoryPath + "-shm");
                 paths.Add(HistoryPath + "-wal");
+            }
+
+            if (BehaviorHistoryPath is not null)
+            {
+                paths.Add(BehaviorHistoryPath);
+                paths.Add(BehaviorHistoryPath + "-shm");
+                paths.Add(BehaviorHistoryPath + "-wal");
             }
 
             if (SignaturePath is not null)
@@ -181,6 +206,30 @@ public sealed class ServiceConfiguration
                 section.GetSection("TrustedSigningKeys"),
                 baseDirectory);
             var historyPath = OptionalPath(section, "HistoryPath", baseDirectory);
+            var behaviorSection = section.GetSection("Behavior");
+            var behaviorEnabled = ReadBoolean(behaviorSection, "Enabled", defaultValue: false);
+            var behaviorHistoryPath = OptionalPath(behaviorSection, "HistoryPath", baseDirectory);
+            var behaviorQueueCapacity = ReadInt(behaviorSection, "QueueCapacity", 1_024);
+            var behaviorPollInterval = TimeSpan.FromMilliseconds(
+                ReadInt(behaviorSection, "PollIntervalMilliseconds", 1_000));
+            if (behaviorEnabled && behaviorHistoryPath is null)
+            {
+                throw new ServiceConfigurationException(
+                    "Behavior:Enabled requires Behavior:HistoryPath.");
+            }
+
+            if (behaviorQueueCapacity is < 2 or > BoundedBehaviorEventIngestor.MaximumCapacity)
+            {
+                throw new ServiceConfigurationException(
+                    $"Behavior:QueueCapacity must be from 2 through {BoundedBehaviorEventIngestor.MaximumCapacity}.");
+            }
+
+            if (behaviorPollInterval < WindowsProcessSnapshotSource.MinimumPollInterval ||
+                behaviorPollInterval > WindowsProcessSnapshotSource.MaximumPollInterval)
+            {
+                throw new ServiceConfigurationException(
+                    "Behavior:PollIntervalMilliseconds must be from 250 through 60000.");
+            }
             var vaultPath = OptionalPath(section, "VaultPath", baseDirectory);
             var securityTelemetrySpoolPath = OptionalPath(
                 section,
@@ -288,6 +337,7 @@ public sealed class ServiceConfiguration
                 signaturePath,
                 contentStorePath,
                 historyPath,
+                behaviorHistoryPath,
                 vaultPath,
                 securityTelemetrySpoolPath,
                 runtimePolicyBundlePath,
@@ -304,7 +354,7 @@ public sealed class ServiceConfiguration
                     "Quarantine response mode requires VaultPath.");
             }
 
-            var writablePaths = new[] { databasePath, historyPath, vaultPath }
+            var writablePaths = new[] { databasePath, historyPath, behaviorHistoryPath, vaultPath }
                 .Where(path => path is not null)
                 .Select(path => path!)
                 .ToArray();
@@ -489,6 +539,10 @@ public sealed class ServiceConfiguration
                 debounceDelay,
                 healthInterval,
                 contentReloadInterval,
+                behaviorEnabled,
+                behaviorHistoryPath,
+                behaviorQueueCapacity,
+                behaviorPollInterval,
                 responsePolicy);
         }
         catch (ServiceConfigurationException)

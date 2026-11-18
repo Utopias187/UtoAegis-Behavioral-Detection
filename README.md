@@ -731,7 +731,7 @@ a clean-file verdict.
 - [x] Add bounded event ingestion, process identity, and provider health.
 - [x] Add Windows event providers and privacy-preserving normalization.
 - [x] Add deterministic behavioral correlation, scoring, and explanations.
-- [ ] Integrate service configuration, history, telemetry, and response policy.
+- [x] Integrate service configuration, history, telemetry, and response policy.
 - [ ] Add attack/benign calibration, overload, and resource-bound coverage.
 - [ ] Add release packaging, operator documentation, and CI verification.
 

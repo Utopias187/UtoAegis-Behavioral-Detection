@@ -2,6 +2,8 @@ using Microsoft.Extensions.Logging;
 using UtoAegis.Core.Monitoring;
 using UtoAegis.Core.Response;
 using UtoAegis.Core.Scanning;
+using UtoAegis.Core.Behavior;
+using UtoAegis.Core.RiskScoring;
 
 namespace UtoAegis.Service;
 
@@ -101,6 +103,15 @@ internal static partial class ServiceLog
         string manifestSha256);
 
     [LoggerMessage(
+        EventId = 108,
+        Level = LogLevel.Information,
+        Message = "Behavior monitoring started for generation {CollectorGenerationId}; poll interval={PollIntervalMilliseconds} ms.")]
+    public static partial void BehaviorMonitoringStarted(
+        ILogger logger,
+        Guid collectorGenerationId,
+        double pollIntervalMilliseconds);
+
+    [LoggerMessage(
         EventId = 200,
         Level = LogLevel.Debug,
         Message = "Scanned {Path}; completed={Completed}, detected={Detected}.")]
@@ -121,6 +132,18 @@ internal static partial class ServiceLog
         int files,
         int detections,
         int issues);
+
+    [LoggerMessage(
+        EventId = 202,
+        Level = LogLevel.Warning,
+        Message = "Behavior assessment for PID {ProcessId}: verdict={Verdict}, score={Score}, confidence={Confidence}, response={ResponseDisposition}.")]
+    public static partial void BehaviorAssessment(
+        ILogger logger,
+        int processId,
+        RiskVerdict verdict,
+        int score,
+        int confidence,
+        string responseDisposition);
 
     [LoggerMessage(
         EventId = 300,
