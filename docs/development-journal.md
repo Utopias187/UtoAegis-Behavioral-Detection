@@ -2127,3 +2127,16 @@ Seven independently reviewable checkpoints cover core ingestion contracts,
 Windows adapters, correlation and scoring, product integration, adversarial and
 false-positive testing, and release readiness. The implementation begins from
 the existing 433-test baseline.
+
+### Bounded behavioral ingestion core
+
+- Added immutable schema-versioned event envelopes, typed payloads, stable event
+  and source vocabularies, and generation-aware process instances that prevent
+  correlation across process-ID reuse or collector restart.
+- Added strict artifact, SHA-256, port, process, payload-kind, timestamp, and
+  collector-generation validation without accepting provider-formatted text.
+- Added a bounded in-memory ingestor with deterministic sequence allocation,
+  checked loss counters, cancellation-aware reads, and an automatically queued
+  degraded provider-health event after overflow capacity returns.
+- Added eight contract, validation, identity, sequence, overflow, and bound
+  tests. The complete suite now contains 441 passing tests.

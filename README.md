@@ -728,7 +728,7 @@ a clean-file verdict.
 ### Milestone 18 — Behavioral telemetry and detection
 
 - [x] Define the event vocabulary, privacy/trust boundary, and retention limits.
-- [ ] Add bounded event ingestion, process identity, and provider health.
+- [x] Add bounded event ingestion, process identity, and provider health.
 - [ ] Add Windows event providers and privacy-preserving normalization.
 - [ ] Add deterministic behavioral correlation, scoring, and explanations.
 - [ ] Integrate service configuration, history, telemetry, and response policy.
