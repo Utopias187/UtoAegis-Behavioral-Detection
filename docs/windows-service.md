@@ -82,6 +82,13 @@ allowlist entries, are resolved from the service installation directory.
     "SecurityTelemetrySpoolPath": "C:\\ProgramData\\UtoAegis\\SecurityTelemetry",
     "DeploymentId": "endpoint-001",
     "TelemetryMaximumRecords": 10000,
+    "Behavior": {
+      "Enabled": false,
+      "Source": "KernelEtw",
+      "HistoryPath": "C:\\ProgramData\\UtoAegis\\behavior-history.db",
+      "QueueCapacity": 1024,
+      "PollIntervalMilliseconds": 1000
+    },
     "Response": {
       "Mode": "ObserveOnly",
       "AllowlistedPathPrefixes": [
@@ -140,11 +147,20 @@ The principal bounds are:
 | `HealthIntervalSeconds` | 10–86,400 |
 | `ContentReloadIntervalSeconds` | 5–3,600 |
 | `TelemetryMaximumRecords` | 1–1,000,000 |
+| `Behavior:QueueCapacity` | 2–8,192 |
+| `Behavior:PollIntervalMilliseconds` | 250–60,000 |
 | `Response:MaxActionsPerWindow` | 1–100 |
 | `Response:RateLimitWindowSeconds` | 1–86,400 |
 
 The policy accepts at most 1,024 path prefixes and 10,000 SHA-256 allowlist
 entries. Hashes must contain exactly 64 hexadecimal characters.
+
+Behavioral collection is opt-in. `KernelEtw` provides the approved process,
+image, file, registry, and TCP connection coverage; Windows must authorize the
+service account to start a kernel trace session. `ProcessSnapshot` is a reduced
+process-only diagnostic source. The full privacy, failure, and recovery
+contract is in the
+[behavioral telemetry guide](behavioral-telemetry-and-detection.md).
 
 ## Response modes
 
@@ -205,10 +221,11 @@ pwsh ./scripts/windows/Get-UtoAegisServiceStatus.ps1
 
 Event IDs are grouped by purpose: `100`–`106` cover lifecycle, health,
 authenticated content loading, reload, and content health; `200`–`201` cover
-file and recovery scans; `300`–`301` cover detections and monitor issues; `302`
-warns about expired last-known-good content; `303` reports a rejected reload;
-and `400` reports history persistence failure. Event data can include file paths
-and must follow the host's access and retention policy.
+file and recovery scans; `108` records behavioral-source startup and `202`
+records bounded behavioral assessments; `300`–`301` cover detections and monitor
+issues; `302` warns about expired last-known-good content; `303` reports a
+rejected reload; and `400` reports history persistence failure. Event data can
+include file paths and must follow the host's access and retention policy.
 
 To recover a quarantined file, stop the service, inspect the vault with
 `quarantine list` and `quarantine show`, then use the CLI `quarantine restore`

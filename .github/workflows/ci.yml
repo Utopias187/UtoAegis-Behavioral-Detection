@@ -72,6 +72,7 @@ jobs:
           ./tests/release/EnrollmentPackaging.Tests.ps1
           ./tests/release/PortableExecutablePackaging.Tests.ps1
           ./tests/release/RiskScoringPackaging.Tests.ps1
+          ./tests/release/BehavioralDetectionPackaging.Tests.ps1
 
       - name: Test endpoint enrollment lifecycle
         shell: pwsh

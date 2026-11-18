@@ -111,6 +111,11 @@ if ($LASTEXITCODE -ne 0) {
 $monitorRoot = Resolve-ConfiguredPath ([string]$settings.MonitorRoot) $publish
 $databasePath = Resolve-ConfiguredPath ([string]$settings.DatabasePath) $publish
 $historyPath = Resolve-ConfiguredPath ([string]$settings.HistoryPath) $publish
+$behavior = $settings.PSObject.Properties['Behavior']?.Value
+$behaviorHistoryPath = $null
+if ($null -ne $behavior -and [bool]$behavior.Enabled) {
+    $behaviorHistoryPath = Resolve-ConfiguredPath ([string]$behavior.HistoryPath) $publish
+}
 $vaultPath = Resolve-ConfiguredPath ([string]$settings.VaultPath) $publish
 $signaturePath = Resolve-ConfiguredPath ([string]$settings.SignaturePath) $publish
 $contentStorePath = Resolve-ConfiguredPath ([string]$settings.ContentStorePath) $publish
@@ -162,7 +167,7 @@ try {
 
     $writeDirectories = [Collections.Generic.HashSet[string]]::new(
         [StringComparer]::OrdinalIgnoreCase)
-    foreach ($filePath in @($databasePath, $historyPath)) {
+    foreach ($filePath in @($databasePath, $historyPath, $behaviorHistoryPath)) {
         if ($null -ne $filePath) {
             [void]$writeDirectories.Add([IO.Path]::GetDirectoryName($filePath))
         }

@@ -2198,3 +2198,37 @@ the existing 433-test baseline.
   256-event and 4,096-process limits.
 - Exercised 10,000 ingestion cycles without retained queue entries or event
   loss. The complete suite now contains 475 passing tests.
+
+### Windows kernel collection
+
+- Replaced the process-only production path with an opt-in real-time Windows
+  kernel ETW source for process lifecycle, image load, file write/delete/rename,
+  registry create/set/delete, and outbound TCP connection records. The earlier
+  process snapshot source remains an explicitly selected reduced diagnostic
+  fallback.
+- Seeded already-running processes before correlation, bound the provider queue
+  and source process table, retained PID-reuse-safe start markers, and surfaced
+  ETW loss plus local overflow as degraded provider health.
+- Added `Behavior:Source`, defaulted an enabled deployment to `KernelEtw`, and
+  made unsupported source values fail configuration validation. Trace startup
+  failure remains fatal to the supervised behavior task rather than silently
+  reducing coverage.
+- Locked Microsoft TraceEvent 4.0.0 in every affected dependency graph and
+  documented its license, privacy boundary, service-account prerequisite,
+  recovery workflow, and snapshot coverage limitation.
+- Added two source-bound tests and one service-source configuration test. The
+  focused infrastructure and service suites pass with 186 and 28 tests,
+  bringing the complete solution to 478 tests.
+
+### Release readiness
+
+- Added the behavioral operator guide to release packages and provisioned the
+  enabled behavior-history directory through the least-privilege service
+  installer path.
+- Added a PowerShell release contract for guide sections, calibration breadth,
+  installer ACL handling, the locked ETW dependency, and Milestone 18 checklist
+  completion. Windows CI now runs that contract with the existing release
+  gates.
+- Verified locked restore, a warning-free release build, formatting, all 478
+  .NET tests, PowerShell parsing, release/enrollment/runtime-policy contracts,
+  and the direct/transitive vulnerability audit. Milestone 18 is complete.

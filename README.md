@@ -736,7 +736,7 @@ a clean-file verdict.
 - [x] Add deterministic behavioral correlation, scoring, and explanations.
 - [x] Integrate service configuration, history, telemetry, and response policy.
 - [x] Add attack/benign calibration, overload, and resource-bound coverage.
-- [ ] Add release packaging, operator documentation, and CI verification.
+- [x] Add release packaging, operator documentation, and CI verification.
 
 ### Remaining product roadmap
 

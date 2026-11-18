@@ -172,6 +172,7 @@ try {
             'authenticated-runtime-policy-and-integrity-guard.md',
             'static-pe-executable-analysis.md',
             'explainable-risk-scoring.md',
+            'behavioral-telemetry-and-detection.md',
             'signed-releases-and-upgrades.md')) {
         Copy-Item -LiteralPath (Join-Path $repositoryRoot "docs/$document") `
             -Destination $documentationPath
