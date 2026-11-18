@@ -1,0 +1,98 @@
+[
+  {
+    "id": "ordinary-process",
+    "integrity": "Medium",
+    "persistenceChanges": 0,
+    "publicConnections": 0,
+    "invalidImageLoads": 0,
+    "fileChanges": 0,
+    "providerState": "Healthy",
+    "expectedScore": 0,
+    "expectedVerdict": "NoKnownThreat",
+    "expectedConfidence": 100
+  },
+  {
+    "id": "developer-file-and-network-activity",
+    "integrity": "Medium",
+    "persistenceChanges": 0,
+    "publicConnections": 1,
+    "invalidImageLoads": 0,
+    "fileChanges": 10,
+    "providerState": "Healthy",
+    "expectedScore": 8,
+    "expectedVerdict": "NoKnownThreat",
+    "expectedConfidence": 100
+  },
+  {
+    "id": "single-persistence-change",
+    "integrity": "Medium",
+    "persistenceChanges": 1,
+    "publicConnections": 0,
+    "invalidImageLoads": 0,
+    "fileChanges": 0,
+    "providerState": "Healthy",
+    "expectedScore": 8,
+    "expectedVerdict": "NoKnownThreat",
+    "expectedConfidence": 100
+  },
+  {
+    "id": "persistence-and-public-network",
+    "integrity": "Medium",
+    "persistenceChanges": 1,
+    "publicConnections": 1,
+    "invalidImageLoads": 0,
+    "fileChanges": 0,
+    "providerState": "Healthy",
+    "expectedScore": 38,
+    "expectedVerdict": "Review",
+    "expectedConfidence": 100
+  },
+  {
+    "id": "invalid-image-and-public-network",
+    "integrity": "Medium",
+    "persistenceChanges": 0,
+    "publicConnections": 1,
+    "invalidImageLoads": 1,
+    "fileChanges": 0,
+    "providerState": "Healthy",
+    "expectedScore": 33,
+    "expectedVerdict": "NoKnownThreat",
+    "expectedConfidence": 100
+  },
+  {
+    "id": "multi-category-attack-sequence",
+    "integrity": "High",
+    "persistenceChanges": 1,
+    "publicConnections": 1,
+    "invalidImageLoads": 1,
+    "fileChanges": 40,
+    "providerState": "Healthy",
+    "expectedScore": 100,
+    "expectedVerdict": "Malicious",
+    "expectedConfidence": 100
+  },
+  {
+    "id": "degraded-attack-sequence",
+    "integrity": "High",
+    "persistenceChanges": 1,
+    "publicConnections": 1,
+    "invalidImageLoads": 1,
+    "fileChanges": 40,
+    "providerState": "Degraded",
+    "expectedScore": 100,
+    "expectedVerdict": "Review",
+    "expectedConfidence": 70
+  },
+  {
+    "id": "unreliable-negative-evidence",
+    "integrity": "Medium",
+    "persistenceChanges": 0,
+    "publicConnections": 0,
+    "invalidImageLoads": 0,
+    "fileChanges": 0,
+    "providerState": "Unreliable",
+    "expectedScore": 0,
+    "expectedVerdict": "Inconclusive",
+    "expectedConfidence": 0
+  }
+]

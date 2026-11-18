@@ -13,5 +13,7 @@
              CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Fixtures/RiskScoring/calibration-corpus.json"
              CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Fixtures/Behavior/behavior-calibration-corpus.json"
+             CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

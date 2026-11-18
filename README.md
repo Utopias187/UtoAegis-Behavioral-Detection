@@ -732,7 +732,7 @@ a clean-file verdict.
 - [x] Add Windows event providers and privacy-preserving normalization.
 - [x] Add deterministic behavioral correlation, scoring, and explanations.
 - [x] Integrate service configuration, history, telemetry, and response policy.
-- [ ] Add attack/benign calibration, overload, and resource-bound coverage.
+- [x] Add attack/benign calibration, overload, and resource-bound coverage.
 - [ ] Add release packaging, operator documentation, and CI verification.
 
 ### Remaining product roadmap

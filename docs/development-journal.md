@@ -2187,3 +2187,14 @@ the existing 433-test baseline.
   response mode but defer quarantine until an artifact is safely verified.
 - Added eleven coordinator, snapshot, pipeline, persistence, migration, and
   configuration tests. The complete suite now contains 470 passing tests.
+
+### Calibration, overload, and resource bounds
+
+- Added a locked synthetic corpus for ordinary processes, developer file and
+  network activity, isolated persistence, correlated review signals, healthy
+  multi-category attacks, degraded attacks, and unreliable negative evidence.
+- Added a false-positive regression proving 200 file changes alone remain below
+  review, plus long-window and active-process tests that hold the documented
+  256-event and 4,096-process limits.
+- Exercised 10,000 ingestion cycles without retained queue entries or event
+  loss. The complete suite now contains 475 passing tests.
