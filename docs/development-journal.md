@@ -2013,3 +2013,17 @@ isolation.
 - Milestone 16 is complete. Static PE facts are ready as bounded evidence for
   Milestone 17 explainable risk scoring; they do not independently assign a
   malware verdict.
+
+## Milestone 17 — Explainable risk scoring and verdict aggregation
+
+Milestone 17 turns completed detector output into a bounded, reproducible risk
+assessment without treating heuristic correlation as certainty. The verdict
+vocabulary, evidence precedence, confidence meaning, score contract, policy
+identity requirements, trust boundary, planned checkpoints, and non-goals are
+documented in `docs/explainable-risk-scoring.md` before scoring implementation
+begins.
+
+The default design is conservative: exact configured detections retain
+precedence, heuristic categories are capped, incomplete evidence reduces
+confidence, and only the final `Malicious` verdict authorizes existing automatic
+response behavior. The complete baseline remains 409 passing .NET tests.

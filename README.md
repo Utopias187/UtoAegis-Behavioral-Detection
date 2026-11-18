@@ -708,9 +708,18 @@ a clean-file verdict.
 - [x] Integrate PE facts into scanning, CLI JSON, history, and telemetry.
 - [x] Add malformed corpus, regression coverage, packaging, and documentation.
 
+### Milestone 17 — Explainable risk scoring and verdict aggregation
+
+- [x] Define the verdict vocabulary, evidence contract, and trust boundary.
+- [ ] Extract normalized, bounded PE risk features with stable identifiers.
+- [ ] Add a versioned weighted policy, validation, and category caps.
+- [ ] Aggregate exact detectors and heuristics with explicit precedence.
+- [ ] Integrate assessments into scanning, CLI, history, and telemetry.
+- [ ] Add calibration, determinism, and false-positive regression coverage.
+- [ ] Add release packaging, operator documentation, and CI verification.
+
 ### Remaining product roadmap
 
-- Milestone 17: heuristic risk scoring and explainable verdict aggregation.
 - Milestone 18: behavioral telemetry and detection.
 - Milestone 19: desktop operator interface.
 - Milestone 20: cloud intelligence/control-plane hardening and production pilot
