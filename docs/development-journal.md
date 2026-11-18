@@ -1918,3 +1918,21 @@ isolation.
 - Added valid managed-assembly, non-PE, truncated MZ, invalid PE offset, empty,
   and configured-size-limit tests. The complete suite now contains 387 passing
   tests.
+
+### Section mapping, overlap, and entropy facts
+
+- Added bounded section records containing the eight-byte PE name, virtual and
+  raw ranges, characteristics, Shannon entropy, raw/virtual alignment, header
+  overlap, inter-section overlap, and entry-point containment facts.
+- Converted every signed parser field through checked non-negative conversion
+  and validated raw ends against the opened file length and mapped virtual ends
+  against both `SizeOfImage` and the 32-bit RVA space.
+- Calculated entropy with one pooled 64 KiB buffer and a fixed 256-counter
+  histogram, so memory use does not scale with section size. Cancellation is
+  observed on each bounded read and rented memory is cleared before return.
+- Recorded raw and virtual overlaps symmetrically without converting a
+  parseable structural anomaly into a malware verdict. Out-of-file and
+  out-of-image ranges remain malformed and fail closed.
+- Added real-assembly range/entropy checks plus synthetic out-of-file,
+  overlapping-raw-section, and zero-entropy fixtures. The complete suite now
+  contains 390 passing tests.

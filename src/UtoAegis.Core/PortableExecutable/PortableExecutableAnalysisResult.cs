@@ -4,6 +4,7 @@ public sealed record PortableExecutableAnalysisResult(
     PortableExecutableAnalysisStatus Status,
     long FileSizeBytes,
     PortableExecutableHeader? Header,
+    IReadOnlyList<PortableExecutableSection> Sections,
     PortableExecutableIssueCode IssueCode)
 {
     public bool IsPortableExecutable => Status == PortableExecutableAnalysisStatus.Analyzed;

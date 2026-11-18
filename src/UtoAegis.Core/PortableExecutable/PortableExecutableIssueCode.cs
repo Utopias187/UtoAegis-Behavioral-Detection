@@ -13,6 +13,10 @@ public enum PortableExecutableIssueCode
     UnsupportedFormat = 8,
     ExcessiveSectionCount = 9,
     ExcessiveDataDirectoryCount = 10,
-    FileChanged = 11,
-    IoFailure = 12
+    InvalidSectionName = 11,
+    SectionRangeOutOfBounds = 12,
+    VirtualRangeOutOfBounds = 13,
+    InvalidAlignment = 14,
+    FileChanged = 15,
+    IoFailure = 16
 }
