@@ -2027,3 +2027,16 @@ The default design is conservative: exact configured detections retain
 precedence, heuristic categories are capped, incomplete evidence reduces
 confidence, and only the final `Malicious` verdict authorizes existing automatic
 response behavior. The complete baseline remains 409 passing .NET tests.
+
+### Normalized PE risk features
+
+- Added immutable risk features with bounded lowercase identifiers, explicit
+  categories, and deterministic integer strength from 1 through 100.
+- Extracted structural overlap, entry-point mapping, write/execute memory,
+  executable entropy, import capability groups, ordinal imports, TLS callbacks,
+  overlays, and missing ASLR/NX compatibility from the completed PE report.
+- Kept raw import names, metadata, filenames, and paths out of feature output.
+  Capability membership is converted only into trusted stable identifiers.
+- Bounded each PE assessment to 32 sorted features and added constructor,
+  malformed/non-PE, synthetic suspicious, and real-assembly determinism tests.
+  The complete suite now contains 415 passing tests.

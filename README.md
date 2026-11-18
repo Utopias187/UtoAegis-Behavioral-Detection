@@ -711,7 +711,7 @@ a clean-file verdict.
 ### Milestone 17 — Explainable risk scoring and verdict aggregation
 
 - [x] Define the verdict vocabulary, evidence contract, and trust boundary.
-- [ ] Extract normalized, bounded PE risk features with stable identifiers.
+- [x] Extract normalized, bounded PE risk features with stable identifiers.
 - [ ] Add a versioned weighted policy, validation, and category caps.
 - [ ] Aggregate exact detectors and heuristics with explicit precedence.
 - [ ] Integrate assessments into scanning, CLI, history, and telemetry.
