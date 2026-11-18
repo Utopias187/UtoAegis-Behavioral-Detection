@@ -2040,3 +2040,16 @@ response behavior. The complete baseline remains 409 passing .NET tests.
 - Bounded each PE assessment to 32 sorted features and added constructor,
   malformed/non-PE, synthetic suspicious, and real-assembly determinism tests.
   The complete suite now contains 415 passing tests.
+
+### Versioned weighted policy and score engine
+
+- Added a schema-versioned immutable default policy with stable identity,
+  monotonic policy version, validated review/detection thresholds, unique rule
+  IDs, trusted explanations, and a cap for every feature category.
+- Added checked integer scoring that combines feature strength and rule weight,
+  sorts contributions deterministically, ignores unknown forward-compatible
+  feature IDs, and caps correlated contributions before the total 0-100 cap.
+- Kept raw and applied points in every contribution plus per-category raw,
+  capped, and applied totals so every score is reproducible and explainable.
+- Added policy validation, cap arithmetic, input-order determinism, and unknown
+  feature tests. The complete suite now contains 421 passing tests.
