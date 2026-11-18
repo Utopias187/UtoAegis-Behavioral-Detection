@@ -33,9 +33,21 @@ if ($corpus.Count -lt 6) {
 }
 
 $readme = Get-Content -LiteralPath (Join-Path $repositoryRoot 'README.md') -Raw
-if ($readme.Contains(
-        '- [ ] Add release packaging, operator documentation, and CI verification.',
-        [StringComparison]::Ordinal)) {
+$milestoneStart = $readme.IndexOf(
+    '### Milestone 17 — Explainable risk scoring and verdict aggregation',
+    [StringComparison]::Ordinal)
+$milestoneEnd = $readme.IndexOf(
+    '### Milestone 18 —',
+    $milestoneStart,
+    [StringComparison]::Ordinal)
+if ($milestoneStart -lt 0 -or $milestoneEnd -le $milestoneStart) {
+    throw 'The Milestone 17 checklist boundary is missing.'
+}
+
+$milestoneChecklist = $readme.Substring(
+    $milestoneStart,
+    $milestoneEnd - $milestoneStart)
+if ($milestoneChecklist.Contains('- [ ]', [StringComparison]::Ordinal)) {
     throw 'The Milestone 17 release checklist is not complete.'
 }
 

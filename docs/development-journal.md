@@ -2107,3 +2107,23 @@ response behavior. The complete baseline remains 409 passing .NET tests.
   .NET tests, PowerShell parsing, every release/enrollment/runtime-policy
   contract, and the direct/transitive vulnerability audit. Milestone 17 is
   complete.
+
+## Milestone 18 — Behavioral telemetry and detection
+
+Milestone 18 begins with a documented local-first collection boundary before
+any operating-system provider is enabled. The version-1 vocabulary covers only
+process lifecycle, image load, file/registry change, network connection, and
+provider-health facts needed for bounded correlation. Command lines, content,
+memory, packet payloads, keystrokes, screenshots, environment data, and raw
+registry values are explicitly excluded.
+
+The contract defines immutable normalization, process-ID reuse protection,
+monotonic receipt ordering, provider generations, deterministic eviction,
+bounded queue/process/event/feature counts, a five-minute in-memory window, and
+summary-only persistence. Event gaps and restarts reduce confidence or make a
+negative conclusion inconclusive rather than silently producing a clean result.
+
+Seven independently reviewable checkpoints cover core ingestion contracts,
+Windows adapters, correlation and scoring, product integration, adversarial and
+false-positive testing, and release readiness. The implementation begins from
+the existing 433-test baseline.

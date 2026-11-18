@@ -41,6 +41,9 @@ privacy limits are in the
 [endpoint enrollment guide](docs/endpoint-enrollment-and-policy-distribution.md).
 Explainable verdicts, confidence, policy thresholds, and calibration are in the
 [risk scoring operator guide](docs/explainable-risk-scoring.md).
+Milestone 18 collection limits, privacy controls, event vocabulary, and failure
+semantics are in the
+[behavioral telemetry and detection guide](docs/behavioral-telemetry-and-detection.md).
 
 ## Current architecture
 
@@ -722,9 +725,18 @@ a clean-file verdict.
 - [x] Add calibration, determinism, and false-positive regression coverage.
 - [x] Add release packaging, operator documentation, and CI verification.
 
+### Milestone 18 — Behavioral telemetry and detection
+
+- [x] Define the event vocabulary, privacy/trust boundary, and retention limits.
+- [ ] Add bounded event ingestion, process identity, and provider health.
+- [ ] Add Windows event providers and privacy-preserving normalization.
+- [ ] Add deterministic behavioral correlation, scoring, and explanations.
+- [ ] Integrate service configuration, history, telemetry, and response policy.
+- [ ] Add attack/benign calibration, overload, and resource-bound coverage.
+- [ ] Add release packaging, operator documentation, and CI verification.
+
 ### Remaining product roadmap
 
-- Milestone 18: behavioral telemetry and detection.
 - Milestone 19: desktop operator interface.
 - Milestone 20: cloud intelligence/control-plane hardening and production pilot
   readiness.
