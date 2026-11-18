@@ -323,10 +323,18 @@ internal sealed class ServiceWorker(
     {
         using var pipeline = new WindowsBehaviorDetectionPipeline(
             configuration.BehaviorQueueCapacity);
-        var source = new WindowsProcessSnapshotSource(configuration.BehaviorPollInterval);
+        var records = configuration.BehaviorSource switch
+        {
+            BehaviorSourceKind.KernelEtw => new WindowsKernelBehaviorSource(
+                configuration.BehaviorQueueCapacity).ReadAllAsync(cancellationToken),
+            BehaviorSourceKind.ProcessSnapshot => new WindowsProcessSnapshotSource(
+                configuration.BehaviorPollInterval).ReadAllAsync(cancellationToken),
+            _ => throw new InvalidOperationException("The behavioral event source is unsupported.")
+        };
         ServiceLog.BehaviorMonitoringStarted(
             logger,
             pipeline.CollectorGenerationId,
+            configuration.BehaviorSource,
             configuration.BehaviorPollInterval.TotalMilliseconds);
         await TryWriteTelemetryAsync(
             securityTelemetry,
@@ -335,13 +343,14 @@ internal sealed class ServiceWorker(
             new
             {
                 pipeline.CollectorGenerationId,
+                source = configuration.BehaviorSource.ToString(),
                 queueCapacity = configuration.BehaviorQueueCapacity,
                 pollIntervalMilliseconds = configuration.BehaviorPollInterval.TotalMilliseconds,
                 responseMode = configuration.ResponsePolicy.Mode.ToString()
             },
             cancellationToken);
 
-        await foreach (var record in source.ReadAllAsync(cancellationToken))
+        await foreach (var record in records)
         {
             foreach (var assessment in pipeline.Process(record).Where(item =>
                          item.Verdict != RiskVerdict.NoKnownThreat))

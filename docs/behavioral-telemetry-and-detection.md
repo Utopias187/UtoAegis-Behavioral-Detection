@@ -114,6 +114,74 @@ Provider restart creates a new generation and closes all prior correlation
 state. Rules cannot correlate across generations. Counters use checked integer
 arithmetic, and state eviction is deterministic by oldest receipt sequence.
 
+## Enabling collection safely
+
+Behavioral collection is disabled in the shipped configuration. Enable it only
+after the service is installed, its state directory ACL is protected, and the
+host owner has approved the privacy boundary in this guide:
+
+```json
+"Behavior": {
+  "Enabled": true,
+  "Source": "KernelEtw",
+  "HistoryPath": "C:\\ProgramData\\UtoAegis\\behavior-history.db",
+  "QueueCapacity": 1024,
+  "PollIntervalMilliseconds": 1000
+}
+```
+
+`KernelEtw` is the production source. It subscribes to the Windows kernel
+process, image, file-I/O, registry, and TCP/IP keywords through a private
+real-time session. UtoAegis maps only process start/stop, image load, file
+write/delete/rename, registry create/set/delete, and outbound TCP connect facts.
+It does not request stacks, command lines, file contents, registry values, DNS
+names, or packet payloads. The service account must be authorized by Windows to
+start a kernel trace session. Authorization failure stops behavioral monitoring
+and therefore stops the supervised service instead of silently falling back to
+weaker evidence.
+
+`ProcessSnapshot` is an explicit diagnostic fallback for hosts where kernel ETW
+has not yet been authorized. It polls only process lifecycle and main-image
+paths, so it cannot observe file, registry, or network correlations and should
+not be represented as full behavioral detection. `PollIntervalMilliseconds`
+applies only to this fallback. Both sources tokenize paths before correlation.
+
+The installer grants the service identity modify access to the parent directory
+of `HistoryPath` only when behavior is enabled. Keep that path outside the
+monitored tree and installation directory. Start in `ObserveOnly`; a behavioral
+assessment never directly quarantines a file because its event evidence does
+not establish a safely re-openable artifact identity.
+
+## Operations and recovery
+
+- A healthy startup emits `behavior.started` with the source, collector
+  generation, queue bound, and response mode. Non-clean assessments emit only
+  bounded feature IDs, category points, policy identity, process-instance
+  numbers, and provider health.
+- ETW loss, local queue overflow, and correlation eviction are explicit health
+  events. Review the Application log and security telemetry before trusting a
+  negative result from the affected window.
+- If `KernelEtw` initialization fails, verify Windows version, service-account
+  trace authorization, and whether another policy blocks real-time kernel
+  sessions. Do not switch to `ProcessSnapshot` without recording the coverage
+  reduction.
+- Restarting the service intentionally creates a new collector generation and
+  discards raw in-memory events. The SQLite database retains bounded assessment
+  summaries only; existing retention procedures may archive or remove it.
+- Disable collection by setting `Enabled` to `false`, validating the
+  configuration, and restarting the service. Removal preserves history for
+  investigation; delete it only under the host's approved retention process.
+
+## Validation and release gates
+
+Every release must restore the committed NuGet graph in locked mode, build with
+warnings as errors, pass formatting, and run all .NET, PowerShell, packaging,
+and vulnerability checks. The behavioral packaging contract additionally
+requires this guide, the calibration corpus, ETW in the production lock graph,
+installer handling for the behavior-history ACL, and a completed Milestone 18
+checklist. Release publishing includes this guide and records TraceEvent plus
+its transitive packages in the generated CycloneDX SBOM.
+
 ## Milestone checkpoints
 
 1. Define event vocabulary, privacy and trust boundaries, retention limits,

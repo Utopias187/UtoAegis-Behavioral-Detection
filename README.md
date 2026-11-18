@@ -52,8 +52,9 @@ semantics are in the
   and signature engines. It has no SQLite dependency.
 - `UtoAegis.Infrastructure` contains separate SQLite reputation and scan-history
   stores, strict JSON Lines readers, the bounded filesystem event source, and
-  the restricted filesystem quarantine vault. It also verifies, stages, and
-  atomically activates signed threat-content bundles.
+  the restricted filesystem quarantine vault. It also owns the bounded Windows
+  ETW normalization boundary and verifies, stages, and atomically activates
+  signed threat-content bundles.
 - `UtoAegis.Cli` handles commands, cancellation, structured logs, output, and
   process exit codes.
 - `UtoAegis.Service` hosts the monitor under Windows Service Control Manager,
@@ -85,6 +86,8 @@ filesystem events -> bounded queue -> debounce --------|
 detection result -> allowlists -> observe / dry run / bounded quarantine
                                          |-> identity recheck -> restricted vault
 Windows SCM -> supervised service -> health and detection events
+Windows kernel ETW -> bounded privacy normalization -> behavioral correlation
+                                       |-> summary history + health telemetry
 restricted vault -> integrity check -> no-overwrite restore
 offline signer -> signed bundle -> verify + stage -> atomic active pointer
                                                |-> last-known-good rollback

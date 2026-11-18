@@ -70,6 +70,35 @@ public sealed class WindowsBehaviorDetectionPipelineTests
         Assert.IsInstanceOfType<WindowsProcessStoppedRecord>(records[1]);
     }
 
+    [TestMethod]
+    public void KernelProcessTable_BoundsStateAndRejectsStaleIdentity()
+    {
+        var table = new WindowsKernelBehaviorSource.ProcessTable();
+        for (var processId = 1;
+             processId <= WindowsBehaviorNormalizer.MaximumTrackedProcessCount + 1;
+             processId++)
+        {
+            table.Register(processId, processId * 10L);
+        }
+
+        Assert.AreEqual(WindowsBehaviorNormalizer.MaximumTrackedProcessCount, table.Count);
+        Assert.IsFalse(table.TryGet(1, out _));
+        Assert.IsTrue(table.TryGet(2, out var retainedMarker));
+        Assert.AreEqual(20, retainedMarker);
+        Assert.IsTrue(table.Remove(2, out var removedMarker));
+        Assert.AreEqual(20, removedMarker);
+        Assert.IsFalse(table.TryGet(2, out _));
+    }
+
+    [TestMethod]
+    public void KernelSource_RejectsUnboundedQueueCapacity()
+    {
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() =>
+            new WindowsKernelBehaviorSource(1));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() =>
+            new WindowsKernelBehaviorSource(WindowsKernelBehaviorSource.MaximumQueueCapacity + 1));
+    }
+
     private static WindowsProcessStartedRecord Start() => new(
         42,
         100,

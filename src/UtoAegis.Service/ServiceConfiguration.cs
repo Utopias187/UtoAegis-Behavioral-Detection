@@ -10,6 +10,12 @@ using UtoAegis.Infrastructure.RuntimeIntegrity;
 
 namespace UtoAegis.Service;
 
+public enum BehaviorSourceKind
+{
+    KernelEtw = 0,
+    ProcessSnapshot = 1
+}
+
 public sealed class ServiceConfiguration
 {
     public static readonly TimeSpan MinimumHealthInterval = TimeSpan.FromSeconds(10);
@@ -40,6 +46,7 @@ public sealed class ServiceConfiguration
         TimeSpan healthInterval,
         TimeSpan contentReloadInterval,
         bool behaviorEnabled,
+        BehaviorSourceKind behaviorSource,
         string? behaviorHistoryPath,
         int behaviorQueueCapacity,
         TimeSpan behaviorPollInterval,
@@ -67,6 +74,7 @@ public sealed class ServiceConfiguration
         HealthInterval = healthInterval;
         ContentReloadInterval = contentReloadInterval;
         BehaviorEnabled = behaviorEnabled;
+        BehaviorSource = behaviorSource;
         BehaviorHistoryPath = behaviorHistoryPath;
         BehaviorQueueCapacity = behaviorQueueCapacity;
         BehaviorPollInterval = behaviorPollInterval;
@@ -118,6 +126,8 @@ public sealed class ServiceConfiguration
     public TimeSpan ContentReloadInterval { get; }
 
     public bool BehaviorEnabled { get; }
+
+    public BehaviorSourceKind BehaviorSource { get; }
 
     public string? BehaviorHistoryPath { get; }
 
@@ -208,6 +218,10 @@ public sealed class ServiceConfiguration
             var historyPath = OptionalPath(section, "HistoryPath", baseDirectory);
             var behaviorSection = section.GetSection("Behavior");
             var behaviorEnabled = ReadBoolean(behaviorSection, "Enabled", defaultValue: false);
+            var behaviorSource = ParseEnum(
+                behaviorSection,
+                "Source",
+                BehaviorSourceKind.KernelEtw);
             var behaviorHistoryPath = OptionalPath(behaviorSection, "HistoryPath", baseDirectory);
             var behaviorQueueCapacity = ReadInt(behaviorSection, "QueueCapacity", 1_024);
             var behaviorPollInterval = TimeSpan.FromMilliseconds(
@@ -540,6 +554,7 @@ public sealed class ServiceConfiguration
                 healthInterval,
                 contentReloadInterval,
                 behaviorEnabled,
+                behaviorSource,
                 behaviorHistoryPath,
                 behaviorQueueCapacity,
                 behaviorPollInterval,

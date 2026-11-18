@@ -99,23 +99,23 @@ public sealed class BehaviorCorrelationEngine
     private static BehaviorRiskFeature[] ExtractFeatures(IReadOnlyList<BehaviorEvent> events)
     {
         var persistence = events.Where(item => item.Payload is RegistryChangedPayload
-            {
-                Location: not BehaviorRegistryLocation.Other
-            }).ToArray();
+        {
+            Location: not BehaviorRegistryLocation.Other
+        }).ToArray();
         var publicNetwork = events.Where(item => item.Payload is NetworkConnectedPayload
-            {
-                Direction: BehaviorNetworkDirection.Outbound,
-                AddressScope: BehaviorAddressScope.Public
-            }).ToArray();
+        {
+            Direction: BehaviorNetworkDirection.Outbound,
+            AddressScope: BehaviorAddressScope.Public
+        }).ToArray();
         var invalidImages = events.Where(item => item.Payload is ImageLoadedPayload
-            {
-                SignatureState: BehaviorSignatureState.Invalid
-            }).ToArray();
+        {
+            SignatureState: BehaviorSignatureState.Invalid
+        }).ToArray();
         var fileChanges = events.Where(item => item.Payload is FileChangedPayload).ToArray();
         var elevatedStarts = events.Where(item => item.Payload is ProcessStartedPayload
-            {
-                Integrity: BehaviorIntegrityClass.High or BehaviorIntegrityClass.System or BehaviorIntegrityClass.Protected
-            }).ToArray();
+        {
+            Integrity: BehaviorIntegrityClass.High or BehaviorIntegrityClass.System or BehaviorIntegrityClass.Protected
+        }).ToArray();
         var features = new List<BehaviorRiskFeature>();
         Add(persistence, features, "behavior.persistence.registry-change", BehaviorFeatureCategory.Persistence,
             Scale(persistence.Length, 2));

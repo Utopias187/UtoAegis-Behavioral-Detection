@@ -105,10 +105,11 @@ internal static partial class ServiceLog
     [LoggerMessage(
         EventId = 108,
         Level = LogLevel.Information,
-        Message = "Behavior monitoring started for generation {CollectorGenerationId}; poll interval={PollIntervalMilliseconds} ms.")]
+        Message = "Behavior monitoring started for generation {CollectorGenerationId}; source={Source}; snapshot poll interval={PollIntervalMilliseconds} ms.")]
     public static partial void BehaviorMonitoringStarted(
         ILogger logger,
         Guid collectorGenerationId,
+        BehaviorSourceKind source,
         double pollIntervalMilliseconds);
 
     [LoggerMessage(

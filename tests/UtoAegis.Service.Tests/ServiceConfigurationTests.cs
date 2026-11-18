@@ -83,6 +83,7 @@ public sealed class ServiceConfigurationTests
         Assert.IsTrue(result.RunInitialScan);
         Assert.AreEqual(TimeSpan.FromSeconds(30), result.ContentReloadInterval);
         Assert.IsFalse(result.BehaviorEnabled);
+        Assert.AreEqual(BehaviorSourceKind.KernelEtw, result.BehaviorSource);
         Assert.AreEqual(1_024, result.BehaviorQueueCapacity);
         Assert.AreEqual(TimeSpan.FromSeconds(1), result.BehaviorPollInterval);
     }
@@ -112,6 +113,7 @@ public sealed class ServiceConfigurationTests
             ["UtoAegis:MonitorRoot"] = monitorRoot,
             ["UtoAegis:DatabasePath"] = "state/reputation.db",
             ["UtoAegis:Behavior:Enabled"] = "true",
+            ["UtoAegis:Behavior:Source"] = "ProcessSnapshot",
             ["UtoAegis:Behavior:HistoryPath"] = behaviorHistory,
             ["UtoAegis:Behavior:QueueCapacity"] = "512",
             ["UtoAegis:Behavior:PollIntervalMilliseconds"] = "750"
@@ -120,10 +122,27 @@ public sealed class ServiceConfigurationTests
         var result = ServiceConfiguration.Load(configuration, testDirectory);
 
         Assert.IsTrue(result.BehaviorEnabled);
+        Assert.AreEqual(BehaviorSourceKind.ProcessSnapshot, result.BehaviorSource);
         Assert.AreEqual(behaviorHistory, result.BehaviorHistoryPath);
         Assert.AreEqual(512, result.BehaviorQueueCapacity);
         Assert.AreEqual(TimeSpan.FromMilliseconds(750), result.BehaviorPollInterval);
         CollectionAssert.Contains(result.OperationalExclusions.ToArray(), behaviorHistory);
+    }
+
+    [TestMethod]
+    public void Load_UnsupportedBehaviorSource_Throws()
+    {
+        var configuration = BuildConfiguration(new Dictionary<string, string?>
+        {
+            ["UtoAegis:MonitorRoot"] = monitorRoot,
+            ["UtoAegis:DatabasePath"] = "state/reputation.db",
+            ["UtoAegis:Behavior:Source"] = "UnboundedEventLog"
+        });
+
+        var exception = Assert.ThrowsExactly<ServiceConfigurationException>(() =>
+            ServiceConfiguration.Load(configuration, testDirectory));
+
+        StringAssert.Contains(exception.Message, "Source is not supported");
     }
 
     [TestMethod]
