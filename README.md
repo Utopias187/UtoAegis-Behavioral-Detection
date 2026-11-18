@@ -141,6 +141,12 @@ into a production indicator database.
 Add `--json` for machine-readable output or `--quiet` to suppress operational
 JSON Lines logs on standard error.
 
+Every successful hash scan also performs verdict-neutral PE analysis. Non-PE
+files are recorded normally; PE files add bounded headers, sections,
+directories, managed metadata, certificate, and overlay facts to JSON output,
+history, and operational telemetry. These structural facts do not change the
+malware verdict until the explainable scoring stage in Milestone 17.
+
 Run the harmless signature example by itself or alongside reputation scanning:
 
 ```powershell
@@ -699,7 +705,7 @@ a clean-file verdict.
 - [x] Traverse imports, delay imports, exports, and resources safely.
 - [x] Extract debug, TLS, load-configuration, relocation, and exception facts.
 - [x] Add managed metadata, certificate-table facts, and overlay analysis.
-- [ ] Integrate PE facts into scanning, CLI JSON, history, and telemetry.
+- [x] Integrate PE facts into scanning, CLI JSON, history, and telemetry.
 - [ ] Add malformed corpus, regression coverage, packaging, and documentation.
 
 ### Remaining product roadmap

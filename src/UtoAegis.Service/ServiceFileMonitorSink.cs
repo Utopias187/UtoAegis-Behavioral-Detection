@@ -137,6 +137,17 @@ internal sealed class ServiceFileMonitorSink(
                         signatureIds = result.Signatures?.Matches
                             .Select(match => match.RuleId)
                             .ToArray() ?? [],
+                        portableExecutable = result.PortableExecutable is null
+                            ? null
+                            : new
+                            {
+                                status = result.PortableExecutable.Status.ToString(),
+                                issueCode = result.PortableExecutable.IssueCode.ToString(),
+                                format = result.PortableExecutable.Header?.Format.ToString(),
+                                machine = result.PortableExecutable.Header?.Machine,
+                                isManaged = result.PortableExecutable.ImageFacts.ManagedMetadata is not null,
+                                overlaySize = result.PortableExecutable.ImageFacts.Overlay.OverlaySize
+                            },
                         decision = decision.Kind.ToString(),
                         decision.Reason
                     },

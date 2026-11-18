@@ -1980,3 +1980,18 @@ isolation.
   the reported overlay size.
 - Added real managed-assembly assertions plus synthetic appended-certificate
   and overlay fixtures. The complete suite now contains 398 passing tests.
+
+### Scanner, CLI, history, and telemetry integration
+
+- Added optional PE analysis to the composite scanner and enabled it in both
+  CLI and service scanner construction. Cross-stage file changes discard PE
+  facts and produce an incomplete combined result.
+- Added complete bounded PE facts to file and directory JSON output, concise
+  human summaries, operational JSON logs, and monitor events.
+- Added stable per-file PE history summaries and a transactional SQLite schema
+  version 2 migration while preserving version 1 data and compatibility.
+- Added compact PE identity to detection-response security telemetry without
+  emitting unbounded directory contents.
+- Added scanner attachment and history migration/round-trip tests, then
+  exercised the built CLI against a managed assembly. The complete suite now
+  contains 400 passing tests.

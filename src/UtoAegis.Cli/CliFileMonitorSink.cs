@@ -64,6 +64,8 @@ internal sealed class CliFileMonitorSink : IFileMonitorSink
                 sha256 = result.Result.FileHash.Sha256,
                 reputationStatus = result.Result.Reputation?.Status.ToString(),
                 signatureStatus = result.Result.Signatures?.Status.ToString(),
+                portableExecutableStatus = result.Result.PortableExecutable?.Status.ToString(),
+                portableExecutableIssueCode = result.Result.PortableExecutable?.IssueCode.ToString(),
                 signatureMatches = result.Result.Signatures?.Matches.Select(match => new
                 {
                     match.RuleId,

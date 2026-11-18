@@ -1,3 +1,4 @@
+using UtoAegis.Core.PortableExecutable;
 using UtoAegis.Core.Reputation;
 using UtoAegis.Core.Signatures;
 
@@ -6,7 +7,8 @@ namespace UtoAegis.Core.Scanning;
 public sealed record FileScanResult(
     FileHashScanResult FileHash,
     HashReputationResult? Reputation,
-    SignatureScanResult? Signatures)
+    SignatureScanResult? Signatures,
+    PortableExecutableAnalysisResult? PortableExecutable = null)
 {
     public string? Path => FileHash.Path ?? Signatures?.Path;
 
@@ -17,5 +19,8 @@ public sealed record FileScanResult(
     public bool IsCompleted =>
         FileHash.IsSuccess &&
         Reputation?.Status != HashReputationStatus.LookupFailed &&
-        (Signatures is null || Signatures.IsCompleted);
+        (Signatures is null || Signatures.IsCompleted) &&
+        PortableExecutable?.Status is not (
+            PortableExecutableAnalysisStatus.UnsafeInput or
+            PortableExecutableAnalysisStatus.IoError);
 }

@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json;
 using Microsoft.Data.Sqlite;
 using UtoAegis.Core.History;
 using UtoAegis.Core.Reputation;
@@ -9,11 +10,13 @@ namespace UtoAegis.Infrastructure.History;
 
 public sealed class SqliteScanHistoryStore : IScanHistoryStore
 {
-    public const int CurrentSchemaVersion = 1;
+    public const int CurrentSchemaVersion = 2;
     public const int MaximumListLimit = 200;
     public const int ApplicationId = 1_431_583_560;
 
     private readonly string _databasePath;
+    private static readonly JsonSerializerOptions PortableExecutableJsonOptions =
+        new(JsonSerializerDefaults.Web);
 
     public SqliteScanHistoryStore(string databasePath)
     {
@@ -72,6 +75,13 @@ public sealed class SqliteScanHistoryStore : IScanHistoryStore
             if (version == 0)
             {
                 await ApplyVersionOneAsync(connection, transaction, cancellationToken)
+                    .ConfigureAwait(false);
+                version = 1;
+            }
+
+            if (version == 1)
+            {
+                await ApplyVersionTwoAsync(connection, transaction, cancellationToken)
                     .ConfigureAwait(false);
             }
 
@@ -404,13 +414,13 @@ public sealed class SqliteScanHistoryStore : IScanHistoryStore
                 detected, completed, reputation_status, reputation_classification,
                 reputation_malware_family, reputation_source, reputation_first_seen_utc,
                 signature_status, signature_engine, signature_match_count,
-                hash_error, reputation_error, signature_error)
+                hash_error, reputation_error, signature_error, portable_executable_json)
             VALUES (
                 $scan_id, $ordinal, $path, $hash_status, $sha256, $file_size_bytes,
                 $detected, $completed, $reputation_status, $reputation_classification,
                 $reputation_malware_family, $reputation_source, $reputation_first_seen_utc,
                 $signature_status, $signature_engine, $signature_match_count,
-                $hash_error, $reputation_error, $signature_error);
+                $hash_error, $reputation_error, $signature_error, $portable_executable_json);
             """;
         foreach (var parameter in new[]
                  {
@@ -418,6 +428,7 @@ public sealed class SqliteScanHistoryStore : IScanHistoryStore
                      "$reputation_classification", "$reputation_malware_family",
                      "$reputation_source", "$reputation_first_seen_utc", "$signature_status",
                      "$signature_engine", "$hash_error", "$reputation_error", "$signature_error"
+                     , "$portable_executable_json"
                  })
         {
             command.Parameters.Add(parameter, SqliteType.Text);
@@ -491,6 +502,9 @@ public sealed class SqliteScanHistoryStore : IScanHistoryStore
         command.Parameters["$hash_error"].Value = DbValue(file.HashError);
         command.Parameters["$reputation_error"].Value = DbValue(file.ReputationError);
         command.Parameters["$signature_error"].Value = DbValue(file.SignatureError);
+        command.Parameters["$portable_executable_json"].Value = file.PortableExecutable is null
+            ? DBNull.Value
+            : JsonSerializer.Serialize(file.PortableExecutable, PortableExecutableJsonOptions);
     }
 
     private static void SetMatchParameters(
@@ -564,7 +578,7 @@ public sealed class SqliteScanHistoryStore : IScanHistoryStore
                    reputation_status, reputation_classification, reputation_malware_family,
                    reputation_source, reputation_first_seen_utc, signature_status,
                    signature_engine, signature_match_count, hash_error,
-                   reputation_error, signature_error
+                   reputation_error, signature_error, portable_executable_json
             FROM scan_history_files
             WHERE scan_id = $scan_id
             ORDER BY ordinal;
@@ -596,7 +610,10 @@ public sealed class SqliteScanHistoryStore : IScanHistoryStore
                     reader.GetInt32(14),
                     reader.IsDBNull(15) ? null : reader.GetString(15),
                     reader.IsDBNull(16) ? null : reader.GetString(16),
-                    reader.IsDBNull(17) ? null : reader.GetString(17)));
+                    reader.IsDBNull(17) ? null : reader.GetString(17),
+                    reader.IsDBNull(18)
+                        ? null
+                        : ReadPortableExecutable(reader.GetString(18))));
             }
         }
 
@@ -633,7 +650,8 @@ public sealed class SqliteScanHistoryStore : IScanHistoryStore
                 matches ?? [],
                 row.HashError,
                 row.ReputationError,
-                row.SignatureError));
+                row.SignatureError,
+                row.PortableExecutable));
         }
 
         return files;
@@ -865,6 +883,21 @@ public sealed class SqliteScanHistoryStore : IScanHistoryStore
             .ConfigureAwait(false);
     }
 
+    private static async ValueTask ApplyVersionTwoAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        CancellationToken cancellationToken)
+    {
+        const string schema =
+            """
+            ALTER TABLE scan_history_files
+                ADD COLUMN portable_executable_json TEXT NULL;
+            PRAGMA user_version = 2;
+            """;
+        await ExecuteNonQueryAsync(connection, schema, transaction, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
     private static async ValueTask ExecuteNonQueryAsync(
         SqliteConnection connection,
         string commandText,
@@ -878,6 +911,23 @@ public sealed class SqliteScanHistoryStore : IScanHistoryStore
     }
 
     private static object DbValue(object? value) => value ?? DBNull.Value;
+
+    private static ScanHistoryPortableExecutable ReadPortableExecutable(string value)
+    {
+        try
+        {
+            return JsonSerializer.Deserialize<ScanHistoryPortableExecutable>(
+                    value,
+                    PortableExecutableJsonOptions) ??
+                throw new JsonException();
+        }
+        catch (JsonException exception)
+        {
+            throw new ScanHistoryStoreException(
+                "The history database contains invalid portable-executable facts.",
+                exception);
+        }
+    }
 
     private static string FormatId(Guid id) => id.ToString("D", CultureInfo.InvariantCulture);
 
@@ -946,5 +996,6 @@ public sealed class SqliteScanHistoryStore : IScanHistoryStore
         int SignatureMatchCount,
         string? HashError,
         string? ReputationError,
-        string? SignatureError);
+        string? SignatureError,
+        ScanHistoryPortableExecutable? PortableExecutable);
 }

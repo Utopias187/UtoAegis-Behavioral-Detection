@@ -44,6 +44,19 @@ exception records. Managed images also report bounded CLR metadata identity and
 table counts. Authenticode certificate records and trailing overlay size are
 measured without treating signature presence as trust.
 
+## Scanner integration
+
+The composite scanner runs PE analysis after hashing and preserves its result
+beside reputation and signature results. Ordinary non-PE files remain completed
+scans. Unsafe-input and I/O failures make the combined scan incomplete, while
+malformed structure remains reportable evidence rather than a detection.
+
+CLI JSON contains the complete bounded report. Human output and operational
+logs contain a compact summary. Scan history schema version 2 stores a stable
+summary for each file and migrates existing version 1 databases transactionally.
+Service detection telemetry includes the same compact PE identity without
+including unbounded names or directory contents.
+
 ## Planned checkpoints
 
 1. Bounded PE recognition, status model, and strict header extraction.

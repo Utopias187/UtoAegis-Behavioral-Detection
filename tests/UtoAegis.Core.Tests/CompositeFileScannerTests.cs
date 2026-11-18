@@ -1,3 +1,4 @@
+using UtoAegis.Core.PortableExecutable;
 using UtoAegis.Core.Reputation;
 using UtoAegis.Core.Scanning;
 using UtoAegis.Core.Signatures;
@@ -137,6 +138,24 @@ public sealed class CompositeFileScannerTests
         {
             Directory.Delete(testDirectory, recursive: true);
         }
+    }
+
+    [TestMethod]
+    public async Task ScanAsync_PortableExecutableAnalyzer_AttachesStructuralFacts()
+    {
+        var path = typeof(CompositeFileScannerTests).Assembly.Location;
+        var scanner = new CompositeFileScanner(
+            new Sha256FileHashScanner(),
+            portableExecutableAnalyzer: new PortableExecutableAnalyzer());
+
+        var result = await scanner.ScanAsync(path);
+
+        Assert.IsTrue(result.IsCompleted);
+        Assert.IsNotNull(result.PortableExecutable);
+        Assert.AreEqual(
+            PortableExecutableAnalysisStatus.Analyzed,
+            result.PortableExecutable.Status);
+        Assert.IsNotNull(result.PortableExecutable.ImageFacts.ManagedMetadata);
     }
 
     private static FileHashScanResult SuccessfulHash(string path) =>

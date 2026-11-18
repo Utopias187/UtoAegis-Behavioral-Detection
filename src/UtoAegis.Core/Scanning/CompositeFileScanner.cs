@@ -1,3 +1,4 @@
+using UtoAegis.Core.PortableExecutable;
 using UtoAegis.Core.Reputation;
 using UtoAegis.Core.Signatures;
 
@@ -8,16 +9,19 @@ public sealed class CompositeFileScanner : IFileScanner
     private readonly IFileHashScanner _hashScanner;
     private readonly IHashReputationStore? _reputationStore;
     private readonly ISignatureScanner? _signatureScanner;
+    private readonly PortableExecutableAnalyzer? _portableExecutableAnalyzer;
 
     public CompositeFileScanner(
         IFileHashScanner hashScanner,
         IHashReputationStore? reputationStore = null,
-        ISignatureScanner? signatureScanner = null)
+        ISignatureScanner? signatureScanner = null,
+        PortableExecutableAnalyzer? portableExecutableAnalyzer = null)
     {
         ArgumentNullException.ThrowIfNull(hashScanner);
         _hashScanner = hashScanner;
         _reputationStore = reputationStore;
         _signatureScanner = signatureScanner;
+        _portableExecutableAnalyzer = portableExecutableAnalyzer;
     }
 
     public async ValueTask<FileScanResult> ScanAsync(
@@ -25,7 +29,8 @@ public sealed class CompositeFileScanner : IFileScanner
         CancellationToken cancellationToken = default)
     {
         FileMetadata? initialMetadata = null;
-        if (_signatureScanner is not null && FileMetadata.TryCapture(path, out var metadata))
+        if ((_signatureScanner is not null || _portableExecutableAnalyzer is not null) &&
+            FileMetadata.TryCapture(path, out var metadata))
         {
             initialMetadata = metadata;
         }
@@ -46,27 +51,49 @@ public sealed class CompositeFileScanner : IFileScanner
                 .ConfigureAwait(false);
         }
 
+        PortableExecutableAnalysisResult? portableExecutable = null;
+        if (_portableExecutableAnalyzer is not null)
+        {
+            portableExecutable = await _portableExecutableAnalyzer
+                .AnalyzeAsync(path, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
         SignatureScanResult? signatures = null;
         if (_signatureScanner is not null)
         {
             signatures = await _signatureScanner
                 .ScanAsync(path, cancellationToken)
                 .ConfigureAwait(false);
+        }
 
-            if (signatures.IsCompleted &&
-                initialMetadata is { } initial &&
-                !initial.Matches(path))
+        if (initialMetadata is { } captured && !captured.Matches(path))
+        {
+            if (signatures?.IsCompleted == true)
             {
                 signatures = SignatureScanResult.Failure(
-                    _signatureScanner.EngineName,
+                    _signatureScanner!.EngineName,
                     SignatureScanStatus.FileChangedDuringScan,
                     hash.Path,
                     signatures.Elapsed,
                     "The file changed between detection stages; combined results were discarded.");
             }
+
+            if (portableExecutable is not null)
+            {
+                portableExecutable = new PortableExecutableAnalysisResult(
+                    PortableExecutableAnalysisStatus.UnsafeInput,
+                    portableExecutable.FileSizeBytes,
+                    null,
+                    [],
+                    PortableExecutableDirectoryFacts.Empty,
+                    PortableExecutablePlatformFacts.Empty,
+                    PortableExecutableImageFacts.Empty,
+                    PortableExecutableIssueCode.FileChanged);
+            }
         }
 
-        return new FileScanResult(hash, reputation, signatures);
+        return new FileScanResult(hash, reputation, signatures, portableExecutable);
     }
 
     private readonly record struct FileMetadata(long Length, DateTime LastWriteTimeUtc)

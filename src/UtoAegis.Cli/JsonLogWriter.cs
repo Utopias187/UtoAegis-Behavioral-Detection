@@ -1,6 +1,7 @@
 using System.Text.Json;
 using UtoAegis.Core.History;
 using UtoAegis.Core.Monitoring;
+using UtoAegis.Core.PortableExecutable;
 using UtoAegis.Core.Quarantine;
 using UtoAegis.Core.Reputation;
 using UtoAegis.Core.Scanning;
@@ -74,6 +75,36 @@ internal static class JsonLogWriter
         result.Path,
         result.Status.ToString(),
         result.Elapsed.TotalMilliseconds);
+
+    public static void PortableExecutableScanFinished(
+        Guid scanId,
+        PortableExecutableAnalysisResult result)
+    {
+        var logEntry = new
+        {
+            timestampUtc = DateTimeOffset.UtcNow,
+            level = result.Status is PortableExecutableAnalysisStatus.Analyzed or
+                PortableExecutableAnalysisStatus.NotPortableExecutable
+                    ? "information"
+                    : "warning",
+            eventName = "portable_executable_analysis_completed",
+            scanId,
+            status = result.Status.ToString(),
+            issueCode = result.IssueCode.ToString(),
+            format = result.Header?.Format.ToString(),
+            machine = result.Header?.Machine,
+            sectionCount = result.Sections.Count,
+            importCount = result.DirectoryFacts.Imports.Count +
+                result.DirectoryFacts.DelayImports.Count,
+            exportCount = result.DirectoryFacts.Exports.Count,
+            resourceCount = result.DirectoryFacts.Resources.Count,
+            isManaged = result.ImageFacts.ManagedMetadata is not null,
+            certificateCount = result.ImageFacts.Certificates.Count,
+            overlaySize = result.ImageFacts.Overlay.OverlaySize
+        };
+
+        Console.Error.WriteLine(JsonSerializer.Serialize(logEntry, SerializerOptions));
+    }
 
     public static void DirectoryScanStarted(
         Guid scanId,

@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Diagnostics;
 using Microsoft.Data.Sqlite;
 using UtoAegis.Core.History;
+using UtoAegis.Core.PortableExecutable;
 using UtoAegis.Core.Reputation;
 using UtoAegis.Core.Scanning;
 using UtoAegis.Core.Signatures;
@@ -75,6 +76,12 @@ public sealed class SqliteScanHistoryStoreTests
         Assert.AreEqual("Harmless.Test", actual.Files[0].ReputationMalwareFamily);
         Assert.AreEqual(1, actual.Files[0].SignatureMatches.Count);
         Assert.AreEqual("demo.rule", actual.Files[0].SignatureMatches[0].RuleId);
+        var portableExecutable = actual.Files[0].PortableExecutable;
+        Assert.IsNotNull(portableExecutable);
+        Assert.AreEqual(
+            PortableExecutableFormat.Pe32Plus,
+            portableExecutable.Format);
+        Assert.AreEqual(17L, portableExecutable.OverlaySize);
         Assert.AreEqual(1, actual.Issues.Count);
         Assert.AreEqual(DirectoryScanIssueKind.ReparsePointSkipped, actual.Issues[0].Kind);
     }
@@ -234,6 +241,39 @@ public sealed class SqliteScanHistoryStoreTests
     }
 
     [TestMethod]
+    public async Task InitializeAsync_VersionOneDatabase_AddsPortableExecutableFacts()
+    {
+        Directory.CreateDirectory(_testDirectory);
+        await using (var connection = new SqliteConnection($"Data Source={_databasePath}"))
+        {
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText =
+                $"""
+                CREATE TABLE scan_history_files (scan_id TEXT NOT NULL) STRICT;
+                PRAGMA application_id = {SqliteScanHistoryStore.ApplicationId};
+                PRAGMA user_version = 1;
+                """;
+            await command.ExecuteNonQueryAsync();
+        }
+
+        var store = new SqliteScanHistoryStore(_databasePath);
+        await store.InitializeAsync();
+
+        await using var verify = new SqliteConnection($"Data Source={_databasePath}");
+        await verify.OpenAsync();
+        await using var verifyCommand = verify.CreateCommand();
+        verifyCommand.CommandText = "PRAGMA user_version;";
+        Assert.AreEqual(
+            (long)SqliteScanHistoryStore.CurrentSchemaVersion,
+            await verifyCommand.ExecuteScalarAsync());
+        verifyCommand.CommandText =
+            "SELECT COUNT(*) FROM pragma_table_info('scan_history_files') " +
+            "WHERE name = 'portable_executable_json';";
+        Assert.AreEqual(1L, await verifyCommand.ExecuteScalarAsync());
+    }
+
+    [TestMethod]
     public async Task ListAsync_InvalidLimit_Throws()
     {
         var store = new SqliteScanHistoryStore(_databasePath);
@@ -267,7 +307,8 @@ public sealed class SqliteScanHistoryStoreTests
                 SignatureMatches: [],
                 HashError: null,
                 ReputationError: null,
-                SignatureError: null))
+                SignatureError: null,
+                PortableExecutable: null))
             .ToArray();
         var record = ScanHistoryRecord.Restore(
             Guid.NewGuid(),
@@ -312,7 +353,20 @@ public sealed class SqliteScanHistoryStoreTests
                 [new ScanHistorySignatureMatch("demo.rule", "Demo rule", "unit-test", 7, 8)],
                 HashError: null,
                 ReputationError: null,
-                SignatureError: null)
+                SignatureError: null,
+                PortableExecutable: new ScanHistoryPortableExecutable(
+                    PortableExecutableAnalysisStatus.Analyzed,
+                    PortableExecutableIssueCode.None,
+                    PortableExecutableFormat.Pe32Plus,
+                    0x8664,
+                    6,
+                    12,
+                    1,
+                    3,
+                    4,
+                    IsManaged: true,
+                    CertificateCount: 1,
+                    OverlaySize: 17))
         };
         var issues = new[]
         {

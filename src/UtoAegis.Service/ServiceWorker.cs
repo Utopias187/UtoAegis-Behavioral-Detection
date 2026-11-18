@@ -2,6 +2,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using UtoAegis.Core.History;
 using UtoAegis.Core.Monitoring;
+using UtoAegis.Core.PortableExecutable;
 using UtoAegis.Core.Reputation;
 using UtoAegis.Core.Response;
 using UtoAegis.Core.Scanning;
@@ -312,7 +313,8 @@ internal sealed class ServiceWorker(
         return new CompositeFileScanner(
             new Sha256FileHashScanner(),
             reputationStore,
-            signatureScanner);
+            signatureScanner,
+            new PortableExecutableAnalyzer());
     }
 
     private async ValueTask<IScanHistoryStore?> CreateHistoryStoreAsync(

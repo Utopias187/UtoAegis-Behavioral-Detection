@@ -21,7 +21,8 @@ public sealed record ScanHistoryFile(
     IReadOnlyList<ScanHistorySignatureMatch> SignatureMatches,
     string? HashError,
     string? ReputationError,
-    string? SignatureError)
+    string? SignatureError,
+    ScanHistoryPortableExecutable? PortableExecutable = null)
 {
     public static ScanHistoryFile FromResult(string path, FileScanResult result)
     {
@@ -52,6 +53,9 @@ public sealed record ScanHistoryFile(
                 .ToArray() ?? [],
             result.FileHash.ErrorMessage,
             result.Reputation?.ErrorMessage,
-            result.Signatures?.ErrorMessage);
+            result.Signatures?.ErrorMessage,
+            result.PortableExecutable is null
+                ? null
+                : ScanHistoryPortableExecutable.FromResult(result.PortableExecutable));
     }
 }

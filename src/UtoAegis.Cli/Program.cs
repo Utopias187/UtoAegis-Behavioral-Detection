@@ -3,6 +3,7 @@ using System.Text.Json.Nodes;
 using UtoAegis.Cli;
 using UtoAegis.Core.History;
 using UtoAegis.Core.Monitoring;
+using UtoAegis.Core.PortableExecutable;
 using UtoAegis.Core.Quarantine;
 using UtoAegis.Core.Response;
 using UtoAegis.Core.Reputation;
@@ -131,6 +132,11 @@ static async Task<int> RunScanAsync(CliOptions options, CancellationToken cancel
         {
             JsonLogWriter.SignatureScanFinished(scanId, result.Signatures);
         }
+
+        if (result.PortableExecutable is not null)
+        {
+            JsonLogWriter.PortableExecutableScanFinished(scanId, result.PortableExecutable);
+        }
     }
 
     var history = await PersistHistoryAsync(
@@ -218,6 +224,11 @@ static async Task<int> RunQuarantineAddAsync(
         if (result.Signatures is not null)
         {
             JsonLogWriter.SignatureScanFinished(scanId, result.Signatures);
+        }
+
+        if (result.PortableExecutable is not null)
+        {
+            JsonLogWriter.PortableExecutableScanFinished(scanId, result.PortableExecutable);
         }
     }
 
@@ -428,7 +439,8 @@ static async ValueTask<IFileScanner> CreateFileScannerAsync(
     return new CompositeFileScanner(
         new Sha256FileHashScanner(),
         reputationStore,
-        signatureScanner);
+        signatureScanner,
+        new PortableExecutableAnalyzer());
 }
 
 static async ValueTask<IScanHistoryStore?> CreateHistoryStoreAsync(
@@ -769,9 +781,44 @@ static object CreateFileScanPayload(FileScanResult result)
                     offset = match.Offset,
                     patternLengthBytes = match.PatternLengthBytes
                 })
-            }
+            },
+        portableExecutable = CreatePortableExecutablePayload(result.PortableExecutable)
     };
 }
+
+static object? CreatePortableExecutablePayload(PortableExecutableAnalysisResult? result) =>
+    result is null
+        ? null
+        : new
+        {
+            status = result.Status.ToString(),
+            issueCode = result.IssueCode.ToString(),
+            result.FileSizeBytes,
+            header = result.Header is null
+                ? null
+                : new
+                {
+                    format = result.Header.Format.ToString(),
+                    result.Header.Machine,
+                    result.Header.CoffTimestamp,
+                    result.Header.Characteristics,
+                    result.Header.Subsystem,
+                    result.Header.DllCharacteristics,
+                    result.Header.ImageBase,
+                    result.Header.EntryPointRva,
+                    result.Header.SectionAlignment,
+                    result.Header.FileAlignment,
+                    result.Header.SizeOfImage,
+                    result.Header.SizeOfHeaders,
+                    result.Header.Checksum,
+                    result.Header.SectionCount,
+                    result.Header.DataDirectoryCount
+                },
+            result.Sections,
+            directories = result.DirectoryFacts,
+            platform = result.PlatformFacts,
+            image = result.ImageFacts
+        };
 
 static void WriteHumanFileDetails(FileScanResult result)
 {
@@ -793,6 +840,24 @@ static void WriteHumanFileDetails(FileScanResult result)
     if (result.Signatures?.Status == SignatureScanStatus.NoMatch)
     {
         Console.WriteLine("Signatures: NO MATCH (no configured exact-byte rule matched)");
+    }
+
+    if (result.PortableExecutable?.Status == PortableExecutableAnalysisStatus.Analyzed)
+    {
+        var pe = result.PortableExecutable;
+        Console.WriteLine(
+            $"PE: {pe.Header!.Format}, machine 0x{pe.Header.Machine:x4}, " +
+            $"{pe.Sections.Count} section(s), " +
+            $"{pe.DirectoryFacts.Imports.Count + pe.DirectoryFacts.DelayImports.Count} import(s), " +
+            $"managed: {pe.ImageFacts.ManagedMetadata is not null}, " +
+            $"overlay: {pe.ImageFacts.Overlay.OverlaySize} byte(s)");
+    }
+    else if (result.PortableExecutable?.Status is PortableExecutableAnalysisStatus.Malformed or
+             PortableExecutableAnalysisStatus.Unsupported)
+    {
+        Console.WriteLine(
+            $"PE: {result.PortableExecutable.Status} " +
+            $"({result.PortableExecutable.IssueCode})");
     }
 }
 
