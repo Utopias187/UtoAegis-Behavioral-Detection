@@ -57,7 +57,68 @@ The default policy is conservative. Missing signatures, missing certificates,
 timestamps, names, or entropy values are not malicious by themselves. Review
 and detection thresholds require multiple independently capped categories.
 
-## Planned checkpoints
+## Operator interpretation
+
+Treat the verdict as a response decision and the score as supporting context:
+
+- `Inconclusive` means at least one configured stage failed. Correct the stage
+  failure and rescan; do not treat the result as clean.
+- `NoKnownThreat` means completed configured stages did not cross a threshold.
+  It is not an allowlist decision and does not prove safety.
+- `Review` should enter an analyst queue. Start with the highest applied
+  contributions, then compare category raw points with applied caps.
+- `Malicious` permits configured response. Check `HasExactDetection` to
+  distinguish an exact reputation/signature match from a threshold decision.
+
+Confidence measures completeness only. A score of 80 with 75% confidence is
+not an 80% probability of malware. Exact matches report 100% confidence in the
+configured match; malformed or unsupported PE analysis reports reduced
+confidence, while failed hashing, reputation, signatures, or PE I/O produces an
+inconclusive assessment.
+
+Every report includes the policy ID and version. Preserve both with exported
+evidence because the same file may receive a different score under a later,
+explicitly recalibrated policy.
+
+## Default policy version 1
+
+Policy `utoaegis.pe.default` version 1 uses review threshold 35 and malicious
+threshold 85. Category caps limit correlated observations:
+
+| Category | Cap | Highest-weight observations |
+| --- | ---: | --- |
+| Structure | 25 | Unmapped entry point, overlapping section ranges |
+| Memory | 30 | Process-injection imports, writable/executable sections |
+| Packing | 25 | High executable entropy, substantial overlay |
+| Execution | 25 | Writable entry point, dynamic resolution, TLS callbacks |
+| Network | 15 | Network/download imports |
+| Persistence | 15 | Service or registry persistence imports |
+| Hardening | 8 | Missing ASLR or NX declarations |
+
+The engine multiplies each trusted rule weight by normalized feature strength,
+rounds with integer arithmetic, applies the category cap, then caps the total at
+100. Full rule IDs, weights, and trusted explanations are defined in
+`RiskScoringPolicy.Default`; CLI JSON returns every raw and applied contribution.
+
+## Calibration and policy maintenance
+
+The locked corpus at
+`tests/UtoAegis.Core.Tests/Fixtures/RiskScoring/calibration-corpus.json` records
+representative feature sets with expected score and verdict. Any policy change
+must follow this sequence:
+
+1. Add benign and suspicious regression cases that justify the proposed change.
+2. Review false-positive impact, especially common hardening, overlay, network,
+   and managed-assembly cases.
+3. Increment the policy version; never reinterpret an existing version in place.
+4. Update corpus expectations and explanations in the same reviewed change.
+5. Run the complete test and release-contract suite before distribution.
+
+Do not tune against filenames, publishers, timestamps, or a single sample. New
+feature families need a stable identifier, bounded strength, trusted explanation,
+category assignment, and a regression proving the category cap still holds.
+
+## Completed checkpoints
 
 1. Verdict vocabulary, evidence contract, threat boundary, and roadmap.
 2. Normalized, bounded PE risk-feature extraction with stable identifiers.

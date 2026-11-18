@@ -2094,3 +2094,16 @@ response behavior. The complete baseline remains 409 passing .NET tests.
   isolated common signals; neither can cross the review threshold alone.
 - Verified adversarial correlated memory evidence cannot escape its category
   cap. The complete suite now contains 433 passing tests.
+
+### Release and operator readiness
+
+- Expanded the operator guide with verdict and confidence interpretation,
+  exact-versus-heuristic handling, the default version-1 thresholds and category
+  caps, and the required calibration/versioning workflow.
+- Added the risk guide to release packages and a PowerShell contract that checks
+  documentation sections, corpus breadth, and Milestone 17 completion.
+- Added the contract to Windows CI alongside the existing packaging checks.
+- Verified locked restore, a warning-free release build, formatting, all 433
+  .NET tests, PowerShell parsing, every release/enrollment/runtime-policy
+  contract, and the direct/transitive vulnerability audit. Milestone 17 is
+  complete.

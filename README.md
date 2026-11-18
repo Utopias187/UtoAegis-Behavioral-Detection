@@ -39,6 +39,8 @@ the [runtime integrity guide](docs/authenticated-runtime-policy-and-integrity-gu
 The Milestone 15 enrollment protocol, trust boundaries, rollout model, and
 privacy limits are in the
 [endpoint enrollment guide](docs/endpoint-enrollment-and-policy-distribution.md).
+Explainable verdicts, confidence, policy thresholds, and calibration are in the
+[risk scoring operator guide](docs/explainable-risk-scoring.md).
 
 ## Current architecture
 
@@ -71,6 +73,8 @@ directory -> bounded traversal -> regular file paths -|
 single file ------------------------------------------|-> composite file scanner
                                                        |-> SHA-256 -> reputation
                                                        |-> fixed-byte signatures
+                                                       |-> bounded PE risk scoring
+                                                       |-> exact-first final verdict
                                                        |-> one explicit file result
                                                        |-> optional history store
 filesystem events -> bounded queue -> debounce --------|
@@ -716,7 +720,7 @@ a clean-file verdict.
 - [x] Aggregate exact detectors and heuristics with explicit precedence.
 - [x] Integrate assessments into scanning, CLI, history, and telemetry.
 - [x] Add calibration, determinism, and false-positive regression coverage.
-- [ ] Add release packaging, operator documentation, and CI verification.
+- [x] Add release packaging, operator documentation, and CI verification.
 
 ### Remaining product roadmap
 
