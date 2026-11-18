@@ -40,8 +40,9 @@ entry-point RVA, alignment values, image/header sizes, checksum, section count,
 data-directory count, bounded section layout and entropy, normal and delayed
 imports, exports, resource identities, debug entries, TLS callbacks,
 load-configuration security fields, relocations, and architecture-aware
-exception records. Later checkpoints add managed metadata, certificate-table
-facts, and overlay measurements without changing that status model.
+exception records. Managed images also report bounded CLR metadata identity and
+table counts. Authenticode certificate records and trailing overlay size are
+measured without treating signature presence as trust.
 
 ## Planned checkpoints
 

@@ -1966,3 +1966,17 @@ isolation.
 - Added per-directory limits and stable issue codes plus positive combined and
   malformed-relocation fixtures. The complete suite now contains 396 passing
   tests.
+
+### Managed metadata, certificates, and overlays
+
+- Added bounded CLR metadata facts for runtime version, COR flags, entry point,
+  metadata/resources/strong-name locations, module and assembly identity, and
+  selected table counts without reflecting or loading managed types.
+- Added checked `WIN_CERTIFICATE` traversal using file offsets, eight-byte
+  alignment, section-separation validation, explicit table and record limits,
+  and revision/type facts. Certificate presence remains verdict-neutral.
+- Added trailing-data measurements from the final mapped section boundary and
+  excluded the complete certificate table, including alignment padding, from
+  the reported overlay size.
+- Added real managed-assembly assertions plus synthetic appended-certificate
+  and overlay fixtures. The complete suite now contains 398 passing tests.

@@ -49,6 +49,9 @@ public sealed class PortableExecutableAnalyzerTests
             (ulong)section.RawDataOffset + section.RawDataSize <= (ulong)result.FileSizeBytes));
         Assert.IsTrue(result.DirectoryFacts.Imports.Any(imported =>
             string.Equals(imported.ModuleName, "mscoree.dll", StringComparison.OrdinalIgnoreCase)));
+        Assert.IsNotNull(result.ImageFacts.ManagedMetadata);
+        StringAssert.Contains(result.ImageFacts.ManagedMetadata.AssemblyName!, "UtoAegis.Core.Tests");
+        Assert.IsGreaterThan(0, result.ImageFacts.ManagedMetadata.TypeDefinitionCount);
     }
 
     [TestMethod]
@@ -387,6 +390,51 @@ public sealed class PortableExecutableAnalyzerTests
         Assert.AreEqual(PortableExecutableIssueCode.InvalidRelocationTable, result.IssueCode);
     }
 
+    [TestMethod]
+    public async Task AnalyzeAsync_AppendedCertificate_ExcludesCertificateFromOverlay()
+    {
+        var original = await LoadFixtureAsync();
+        Assert.AreEqual(0, original.Length & 7);
+        var bytes = new byte[original.Length + 16];
+        original.CopyTo(bytes, 0);
+        WriteUInt32(bytes, original.Length, 16);
+        WriteUInt16(bytes, original.Length + 4, 0x0200);
+        WriteUInt16(bytes, original.Length + 6, 2);
+        WriteDirectory(bytes, 4, checked((uint)original.Length), 16);
+        var path = await WriteFixtureAsync("certificate.dll", bytes);
+
+        var result = await new PortableExecutableAnalyzer().AnalyzeAsync(path);
+
+        Assert.AreEqual(
+            PortableExecutableAnalysisStatus.Analyzed,
+            result.Status,
+            $"Issue: {result.IssueCode}");
+        Assert.HasCount(1, result.ImageFacts.Certificates);
+        Assert.AreEqual((ushort)0x0200, result.ImageFacts.Certificates[0].Revision);
+        Assert.AreEqual((ushort)2, result.ImageFacts.Certificates[0].CertificateType);
+        Assert.AreEqual(16L, result.ImageFacts.Overlay.CertificateBytesExcluded);
+        Assert.AreEqual(0L, result.ImageFacts.Overlay.OverlaySize);
+    }
+
+    [TestMethod]
+    public async Task AnalyzeAsync_AppendedBytes_ReportsOverlay()
+    {
+        var original = await LoadFixtureAsync();
+        var bytes = new byte[original.Length + 5];
+        original.CopyTo(bytes, 0);
+        bytes.AsSpan(original.Length).Fill(0x5a);
+        var path = await WriteFixtureAsync("overlay.dll", bytes);
+
+        var result = await new PortableExecutableAnalyzer().AnalyzeAsync(path);
+
+        Assert.AreEqual(
+            PortableExecutableAnalysisStatus.Analyzed,
+            result.Status,
+            $"Issue: {result.IssueCode}");
+        Assert.AreEqual(5L, result.ImageFacts.Overlay.TrailingDataSize);
+        Assert.AreEqual(5L, result.ImageFacts.Overlay.OverlaySize);
+    }
+
     private static int GetSectionTableOffset(byte[] bytes)
     {
         var peOffset = BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(0x3c, 4));
@@ -456,14 +504,25 @@ public sealed class PortableExecutableAnalyzerTests
         WriteUInt32(bytes, offset + 4, size);
     }
 
+    private static void WriteDirectory(byte[] bytes, int index, uint rva, uint size)
+    {
+        var offset = GetDirectoryOffset(bytes, index);
+        WriteUInt32(bytes, offset, rva);
+        WriteUInt32(bytes, offset + 4, size);
+    }
+
     private static void ClearDirectory(byte[] bytes, int index)
+    {
+        bytes.AsSpan(GetDirectoryOffset(bytes, index), 8).Clear();
+    }
+
+    private static int GetDirectoryOffset(byte[] bytes, int index)
     {
         var peOffset = BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(0x3c, 4));
         var optionalOffset = peOffset + 24;
         var isPe32Plus = BinaryPrimitives.ReadUInt16LittleEndian(
             bytes.AsSpan(optionalOffset, 2)) == 0x20b;
-        var offset = optionalOffset + (isPe32Plus ? 112 : 96) + (index * 8);
-        bytes.AsSpan(offset, 8).Clear();
+        return optionalOffset + (isPe32Plus ? 112 : 96) + (index * 8);
     }
 
     private static void WriteResourceDirectory(byte[] bytes, int offset, ushort idCount) =>

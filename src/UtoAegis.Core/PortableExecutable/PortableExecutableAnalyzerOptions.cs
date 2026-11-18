@@ -11,6 +11,9 @@ public sealed record PortableExecutableAnalyzerOptions
     public const int DefaultMaximumTlsCallbackCount = 256;
     public const int DefaultMaximumRelocationCount = 131_072;
     public const int DefaultMaximumExceptionEntryCount = 65_536;
+    public const int DefaultMaximumMetadataTableRowCount = 1_000_000;
+    public const int DefaultMaximumCertificateCount = 64;
+    public const int DefaultMaximumCertificateTableSize = 16 * 1024 * 1024;
 
     public PortableExecutableAnalyzerOptions(
         long maximumFileSizeBytes = DefaultMaximumFileSizeBytes,
@@ -21,7 +24,10 @@ public sealed record PortableExecutableAnalyzerOptions
         int maximumDebugEntryCount = DefaultMaximumDebugEntryCount,
         int maximumTlsCallbackCount = DefaultMaximumTlsCallbackCount,
         int maximumRelocationCount = DefaultMaximumRelocationCount,
-        int maximumExceptionEntryCount = DefaultMaximumExceptionEntryCount)
+        int maximumExceptionEntryCount = DefaultMaximumExceptionEntryCount,
+        int maximumMetadataTableRowCount = DefaultMaximumMetadataTableRowCount,
+        int maximumCertificateCount = DefaultMaximumCertificateCount,
+        int maximumCertificateTableSize = DefaultMaximumCertificateTableSize)
     {
         if (maximumFileSizeBytes is < 64 or > int.MaxValue)
         {
@@ -68,6 +74,21 @@ public sealed record PortableExecutableAnalyzerOptions
             throw new ArgumentOutOfRangeException(nameof(maximumExceptionEntryCount));
         }
 
+        if (maximumMetadataTableRowCount is < 1 or > 10_000_000)
+        {
+            throw new ArgumentOutOfRangeException(nameof(maximumMetadataTableRowCount));
+        }
+
+        if (maximumCertificateCount is < 1 or > 1_024)
+        {
+            throw new ArgumentOutOfRangeException(nameof(maximumCertificateCount));
+        }
+
+        if (maximumCertificateTableSize is < 8 or > 64 * 1024 * 1024)
+        {
+            throw new ArgumentOutOfRangeException(nameof(maximumCertificateTableSize));
+        }
+
         MaximumFileSizeBytes = maximumFileSizeBytes;
         MaximumSectionCount = maximumSectionCount;
         MaximumImportCount = maximumImportCount;
@@ -77,6 +98,9 @@ public sealed record PortableExecutableAnalyzerOptions
         MaximumTlsCallbackCount = maximumTlsCallbackCount;
         MaximumRelocationCount = maximumRelocationCount;
         MaximumExceptionEntryCount = maximumExceptionEntryCount;
+        MaximumMetadataTableRowCount = maximumMetadataTableRowCount;
+        MaximumCertificateCount = maximumCertificateCount;
+        MaximumCertificateTableSize = maximumCertificateTableSize;
     }
 
     public long MaximumFileSizeBytes { get; }
@@ -96,4 +120,10 @@ public sealed record PortableExecutableAnalyzerOptions
     public int MaximumRelocationCount { get; }
 
     public int MaximumExceptionEntryCount { get; }
+
+    public int MaximumMetadataTableRowCount { get; }
+
+    public int MaximumCertificateCount { get; }
+
+    public int MaximumCertificateTableSize { get; }
 }

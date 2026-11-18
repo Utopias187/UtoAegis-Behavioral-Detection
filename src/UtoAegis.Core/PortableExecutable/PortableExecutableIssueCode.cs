@@ -28,5 +28,7 @@ public enum PortableExecutableIssueCode
     InvalidTlsDirectory = 23,
     InvalidLoadConfiguration = 24,
     InvalidRelocationTable = 25,
-    InvalidExceptionTable = 26
+    InvalidExceptionTable = 26,
+    InvalidManagedMetadata = 27,
+    InvalidCertificateTable = 28
 }

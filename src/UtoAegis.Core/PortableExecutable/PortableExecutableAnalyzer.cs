@@ -174,6 +174,7 @@ public sealed class PortableExecutableAnalyzer
 
             PortableExecutableDirectoryFacts directoryFacts;
             PortableExecutablePlatformFacts platformFacts;
+            PortableExecutableImageFacts imageFacts;
             try
             {
                 directoryFacts = PortableExecutableDirectoryReader.Read(reader, peHeader, options);
@@ -183,6 +184,14 @@ public sealed class PortableExecutableAnalyzer
                     header.Machine,
                     openedLength,
                     options);
+                imageFacts = await PortableExecutableImageReader.ReadAsync(
+                    stream,
+                    reader,
+                    peHeader,
+                    sections.Sections,
+                    openedLength,
+                    options,
+                    cancellationToken).ConfigureAwait(false);
             }
             catch (PortableExecutableDirectoryException exception)
             {
@@ -207,6 +216,7 @@ public sealed class PortableExecutableAnalyzer
                 sections.Sections,
                 directoryFacts,
                 platformFacts,
+                imageFacts,
                 PortableExecutableIssueCode.None);
         }
         catch (OperationCanceledException)
@@ -418,6 +428,7 @@ public sealed class PortableExecutableAnalyzer
             [],
             PortableExecutableDirectoryFacts.Empty,
             PortableExecutablePlatformFacts.Empty,
+            PortableExecutableImageFacts.Empty,
             issueCode);
 
     private sealed record SectionReadResult(
