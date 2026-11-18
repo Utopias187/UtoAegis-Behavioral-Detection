@@ -730,7 +730,7 @@ a clean-file verdict.
 - [x] Define the event vocabulary, privacy/trust boundary, and retention limits.
 - [x] Add bounded event ingestion, process identity, and provider health.
 - [x] Add Windows event providers and privacy-preserving normalization.
-- [ ] Add deterministic behavioral correlation, scoring, and explanations.
+- [x] Add deterministic behavioral correlation, scoring, and explanations.
 - [ ] Integrate service configuration, history, telemetry, and response policy.
 - [ ] Add attack/benign calibration, overload, and resource-bound coverage.
 - [ ] Add release packaging, operator documentation, and CI verification.

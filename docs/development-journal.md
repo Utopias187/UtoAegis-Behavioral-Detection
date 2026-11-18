@@ -2155,3 +2155,18 @@ the existing 433-test baseline.
 - Added nine privacy, determinism, process identity, registry, network, invalid
   enum, and malformed-provider tests. The complete suite now contains 450
   passing tests.
+
+### Deterministic behavioral correlation and scoring
+
+- Added stable behavioral features with bounded event provenance and a
+  versioned default policy containing trusted explanations, review/detection
+  thresholds, and independent caps for six behavior categories.
+- Correlated persistence plus public network activity, invalid image loads plus
+  network activity, elevated persistence, and rapid file changes within one
+  process instance and a deterministic five-minute receipt window.
+- Added per-category raw/applied scores and contribution provenance. Degraded
+  provider data can request review but cannot authorize a malicious verdict;
+  unreliable or stopped providers make the assessment inconclusive.
+- Added nine clean, review, malicious, degraded, unreliable, ordering,
+  process-isolation, and window-boundary tests. The complete suite now contains
+  459 passing tests.
