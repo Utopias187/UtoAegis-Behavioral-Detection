@@ -148,6 +148,24 @@ internal sealed class ServiceFileMonitorSink(
                                 isManaged = result.PortableExecutable.ImageFacts.ManagedMetadata is not null,
                                 overlaySize = result.PortableExecutable.ImageFacts.Overlay.OverlaySize
                             },
+                        risk = result.Risk is null
+                            ? null
+                            : new
+                            {
+                                verdict = result.Risk.Verdict.ToString(),
+                                result.Risk.Confidence,
+                                score = result.Risk.HeuristicScore.Score,
+                                policyId = result.Risk.HeuristicScore.PolicyId,
+                                policyVersion = result.Risk.HeuristicScore.PolicyVersion,
+                                result.Risk.HasExactDetection,
+                                topFeatureIds = result.Risk.HeuristicScore.Contributions
+                                    .Where(item => item.AppliedPoints > 0)
+                                    .OrderByDescending(item => item.AppliedPoints)
+                                    .ThenBy(item => item.FeatureId, StringComparer.Ordinal)
+                                    .Take(5)
+                                    .Select(item => item.FeatureId)
+                                    .ToArray()
+                            },
                         decision = decision.Kind.ToString(),
                         decision.Reason
                     },

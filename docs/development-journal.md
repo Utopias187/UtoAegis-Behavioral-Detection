@@ -2067,3 +2067,18 @@ response behavior. The complete baseline remains 409 passing .NET tests.
   fully completed analysis.
 - Added precedence, threshold, confidence, exact-versus-heuristic, incomplete,
   and clean-result tests. The complete suite now contains 427 passing tests.
+
+### Assessment integration
+
+- Attached a final risk assessment to every composite file scan, including
+  inconclusive hash failures, and made the final malicious verdict the single
+  detection decision used by directory scans and response handling.
+- Added complete assessment output to CLI JSON, concise verdict/score/confidence
+  and top-contribution output for operators, structured log fields, monitor
+  events, and compact service security telemetry.
+- Added a bounded history summary containing verdict, confidence, policy
+  identity, score, exact-evidence state, and the five strongest feature IDs.
+  SQLite history schema version 3 migrates the new JSON column transactionally.
+- Preserved exact quarantine evidence and added policy-versioned evidence for
+  heuristic detections. Scanner and history round-trip/migration coverage now
+  accompany the 428-test suite.

@@ -7,6 +7,7 @@ using UtoAegis.Core.PortableExecutable;
 using UtoAegis.Core.Quarantine;
 using UtoAegis.Core.Response;
 using UtoAegis.Core.Reputation;
+using UtoAegis.Core.RiskScoring;
 using UtoAegis.Core.Scanning;
 using UtoAegis.Core.Signatures;
 using UtoAegis.Infrastructure.Importing;
@@ -137,6 +138,11 @@ static async Task<int> RunScanAsync(CliOptions options, CancellationToken cancel
         {
             JsonLogWriter.PortableExecutableScanFinished(scanId, result.PortableExecutable);
         }
+
+        if (result.Risk is not null)
+        {
+            JsonLogWriter.RiskAssessmentFinished(scanId, result.Risk);
+        }
     }
 
     var history = await PersistHistoryAsync(
@@ -229,6 +235,11 @@ static async Task<int> RunQuarantineAddAsync(
         if (result.PortableExecutable is not null)
         {
             JsonLogWriter.PortableExecutableScanFinished(scanId, result.PortableExecutable);
+        }
+
+        if (result.Risk is not null)
+        {
+            JsonLogWriter.RiskAssessmentFinished(scanId, result.Risk);
         }
     }
 
@@ -782,9 +793,26 @@ static object CreateFileScanPayload(FileScanResult result)
                     patternLengthBytes = match.PatternLengthBytes
                 })
             },
-        portableExecutable = CreatePortableExecutablePayload(result.PortableExecutable)
+        portableExecutable = CreatePortableExecutablePayload(result.PortableExecutable),
+        risk = CreateRiskPayload(result.Risk)
     };
 }
+
+static object? CreateRiskPayload(FileRiskAssessment? result) =>
+    result is null
+        ? null
+        : new
+        {
+            verdict = result.Verdict.ToString(),
+            result.Confidence,
+            policyId = result.HeuristicScore.PolicyId,
+            policyVersion = result.HeuristicScore.PolicyVersion,
+            score = result.HeuristicScore.Score,
+            result.HasExactDetection,
+            categories = result.HeuristicScore.Categories,
+            contributions = result.HeuristicScore.Contributions,
+            evidence = result.Evidence
+        };
 
 static object? CreatePortableExecutablePayload(PortableExecutableAnalysisResult? result) =>
     result is null
@@ -831,6 +859,25 @@ static void WriteHumanFileDetails(FileScanResult result)
 
     Console.WriteLine($"{result.FileHash.Sha256}  {result.FileHash.Path}");
     WriteHumanDetectionAndFailures(result, string.Empty);
+
+    if (result.Risk is not null)
+    {
+        Console.WriteLine(
+            $"Risk: {result.Risk.Verdict} " +
+            $"(score {result.Risk.HeuristicScore.Score}/100, " +
+            $"confidence {result.Risk.Confidence}%, " +
+            $"policy {result.Risk.HeuristicScore.PolicyId}:v{result.Risk.HeuristicScore.PolicyVersion})");
+        foreach (var contribution in result.Risk.HeuristicScore.Contributions
+                     .Where(item => item.AppliedPoints > 0)
+                     .OrderByDescending(item => item.AppliedPoints)
+                     .ThenBy(item => item.FeatureId, StringComparer.Ordinal)
+                     .Take(5))
+        {
+            Console.WriteLine(
+                $"  +{contribution.AppliedPoints} {contribution.FeatureId}: " +
+                contribution.Explanation);
+        }
+    }
 
     if (result.Reputation?.Status == HashReputationStatus.Unknown)
     {

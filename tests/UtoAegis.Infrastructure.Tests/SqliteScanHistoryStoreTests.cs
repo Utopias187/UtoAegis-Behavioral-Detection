@@ -4,6 +4,7 @@ using Microsoft.Data.Sqlite;
 using UtoAegis.Core.History;
 using UtoAegis.Core.PortableExecutable;
 using UtoAegis.Core.Reputation;
+using UtoAegis.Core.RiskScoring;
 using UtoAegis.Core.Scanning;
 using UtoAegis.Core.Signatures;
 using UtoAegis.Infrastructure.History;
@@ -82,6 +83,11 @@ public sealed class SqliteScanHistoryStoreTests
             PortableExecutableFormat.Pe32Plus,
             portableExecutable.Format);
         Assert.AreEqual(17L, portableExecutable.OverlaySize);
+        var risk = actual.Files[0].Risk;
+        Assert.IsNotNull(risk);
+        Assert.AreEqual(RiskVerdict.Malicious, risk!.Verdict);
+        Assert.AreEqual("utoaegis.pe.default", risk.PolicyId);
+        Assert.IsTrue(risk.TopFeatureIds.SequenceEqual(["pe.section.write-execute"]));
         Assert.AreEqual(1, actual.Issues.Count);
         Assert.AreEqual(DirectoryScanIssueKind.ReparsePointSkipped, actual.Issues[0].Kind);
     }
@@ -271,6 +277,41 @@ public sealed class SqliteScanHistoryStoreTests
             "SELECT COUNT(*) FROM pragma_table_info('scan_history_files') " +
             "WHERE name = 'portable_executable_json';";
         Assert.AreEqual(1L, await verifyCommand.ExecuteScalarAsync());
+        verifyCommand.CommandText =
+            "SELECT COUNT(*) FROM pragma_table_info('scan_history_files') " +
+            "WHERE name = 'risk_assessment_json';";
+        Assert.AreEqual(1L, await verifyCommand.ExecuteScalarAsync());
+    }
+
+    [TestMethod]
+    public async Task InitializeAsync_VersionTwoDatabase_AddsRiskAssessment()
+    {
+        Directory.CreateDirectory(_testDirectory);
+        await using (var connection = new SqliteConnection($"Data Source={_databasePath}"))
+        {
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText =
+                $"""
+                CREATE TABLE scan_history_files (
+                    scan_id TEXT NOT NULL,
+                    portable_executable_json TEXT NULL) STRICT;
+                PRAGMA application_id = {SqliteScanHistoryStore.ApplicationId};
+                PRAGMA user_version = 2;
+                """;
+            await command.ExecuteNonQueryAsync();
+        }
+
+        var store = new SqliteScanHistoryStore(_databasePath);
+        await store.InitializeAsync();
+
+        await using var verify = new SqliteConnection($"Data Source={_databasePath}");
+        await verify.OpenAsync();
+        await using var verifyCommand = verify.CreateCommand();
+        verifyCommand.CommandText =
+            "SELECT COUNT(*) FROM pragma_table_info('scan_history_files') " +
+            "WHERE name = 'risk_assessment_json';";
+        Assert.AreEqual(1L, await verifyCommand.ExecuteScalarAsync());
     }
 
     [TestMethod]
@@ -366,7 +407,15 @@ public sealed class SqliteScanHistoryStoreTests
                     4,
                     IsManaged: true,
                     CertificateCount: 1,
-                    OverlaySize: 17))
+                    OverlaySize: 17),
+                Risk: new ScanHistoryRiskAssessment(
+                    RiskVerdict.Malicious,
+                    100,
+                    "utoaegis.pe.default",
+                    1,
+                    87,
+                    HasExactDetection: true,
+                    ["pe.section.write-execute"]))
         };
         var issues = new[]
         {

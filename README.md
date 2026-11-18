@@ -714,7 +714,7 @@ a clean-file verdict.
 - [x] Extract normalized, bounded PE risk features with stable identifiers.
 - [x] Add a versioned weighted policy, validation, and category caps.
 - [x] Aggregate exact detectors and heuristics with explicit precedence.
-- [ ] Integrate assessments into scanning, CLI, history, and telemetry.
+- [x] Integrate assessments into scanning, CLI, history, and telemetry.
 - [ ] Add calibration, determinism, and false-positive regression coverage.
 - [ ] Add release packaging, operator documentation, and CI verification.
 

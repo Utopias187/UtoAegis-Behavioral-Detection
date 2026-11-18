@@ -1,5 +1,6 @@
 using UtoAegis.Core.PortableExecutable;
 using UtoAegis.Core.Reputation;
+using UtoAegis.Core.RiskScoring;
 using UtoAegis.Core.Signatures;
 
 namespace UtoAegis.Core.Scanning;
@@ -10,18 +11,21 @@ public sealed class CompositeFileScanner : IFileScanner
     private readonly IHashReputationStore? _reputationStore;
     private readonly ISignatureScanner? _signatureScanner;
     private readonly PortableExecutableAnalyzer? _portableExecutableAnalyzer;
+    private readonly RiskVerdictAggregator _riskAggregator;
 
     public CompositeFileScanner(
         IFileHashScanner hashScanner,
         IHashReputationStore? reputationStore = null,
         ISignatureScanner? signatureScanner = null,
-        PortableExecutableAnalyzer? portableExecutableAnalyzer = null)
+        PortableExecutableAnalyzer? portableExecutableAnalyzer = null,
+        RiskVerdictAggregator? riskAggregator = null)
     {
         ArgumentNullException.ThrowIfNull(hashScanner);
         _hashScanner = hashScanner;
         _reputationStore = reputationStore;
         _signatureScanner = signatureScanner;
         _portableExecutableAnalyzer = portableExecutableAnalyzer;
+        _riskAggregator = riskAggregator ?? new RiskVerdictAggregator();
     }
 
     public async ValueTask<FileScanResult> ScanAsync(
@@ -40,7 +44,12 @@ public sealed class CompositeFileScanner : IFileScanner
             .ConfigureAwait(false);
         if (!hash.IsSuccess)
         {
-            return new FileScanResult(hash, Reputation: null, Signatures: null);
+            var failedRisk = _riskAggregator.Assess(hash, null, null, null);
+            return new FileScanResult(
+                hash,
+                Reputation: null,
+                Signatures: null,
+                Risk: failedRisk);
         }
 
         HashReputationResult? reputation = null;
@@ -93,7 +102,8 @@ public sealed class CompositeFileScanner : IFileScanner
             }
         }
 
-        return new FileScanResult(hash, reputation, signatures, portableExecutable);
+        var risk = _riskAggregator.Assess(hash, reputation, signatures, portableExecutable);
+        return new FileScanResult(hash, reputation, signatures, portableExecutable, risk);
     }
 
     private readonly record struct FileMetadata(long Length, DateTime LastWriteTimeUtc)

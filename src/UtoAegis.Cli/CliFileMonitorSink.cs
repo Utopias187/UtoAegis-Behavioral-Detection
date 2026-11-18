@@ -66,6 +66,11 @@ internal sealed class CliFileMonitorSink : IFileMonitorSink
                 signatureStatus = result.Result.Signatures?.Status.ToString(),
                 portableExecutableStatus = result.Result.PortableExecutable?.Status.ToString(),
                 portableExecutableIssueCode = result.Result.PortableExecutable?.IssueCode.ToString(),
+                riskVerdict = result.Result.Risk?.Verdict.ToString(),
+                riskScore = result.Result.Risk?.HeuristicScore.Score,
+                riskConfidence = result.Result.Risk?.Confidence,
+                riskPolicyId = result.Result.Risk?.HeuristicScore.PolicyId,
+                riskPolicyVersion = result.Result.Risk?.HeuristicScore.PolicyVersion,
                 signatureMatches = result.Result.Signatures?.Matches.Select(match => new
                 {
                     match.RuleId,

@@ -10,7 +10,7 @@ namespace UtoAegis.Infrastructure.History;
 
 public sealed class SqliteScanHistoryStore : IScanHistoryStore
 {
-    public const int CurrentSchemaVersion = 2;
+    public const int CurrentSchemaVersion = 3;
     public const int MaximumListLimit = 200;
     public const int ApplicationId = 1_431_583_560;
 
@@ -82,6 +82,13 @@ public sealed class SqliteScanHistoryStore : IScanHistoryStore
             if (version == 1)
             {
                 await ApplyVersionTwoAsync(connection, transaction, cancellationToken)
+                    .ConfigureAwait(false);
+                version = 2;
+            }
+
+            if (version == 2)
+            {
+                await ApplyVersionThreeAsync(connection, transaction, cancellationToken)
                     .ConfigureAwait(false);
             }
 
@@ -414,13 +421,15 @@ public sealed class SqliteScanHistoryStore : IScanHistoryStore
                 detected, completed, reputation_status, reputation_classification,
                 reputation_malware_family, reputation_source, reputation_first_seen_utc,
                 signature_status, signature_engine, signature_match_count,
-                hash_error, reputation_error, signature_error, portable_executable_json)
+                hash_error, reputation_error, signature_error, portable_executable_json,
+                risk_assessment_json)
             VALUES (
                 $scan_id, $ordinal, $path, $hash_status, $sha256, $file_size_bytes,
                 $detected, $completed, $reputation_status, $reputation_classification,
                 $reputation_malware_family, $reputation_source, $reputation_first_seen_utc,
                 $signature_status, $signature_engine, $signature_match_count,
-                $hash_error, $reputation_error, $signature_error, $portable_executable_json);
+                $hash_error, $reputation_error, $signature_error, $portable_executable_json,
+                $risk_assessment_json);
             """;
         foreach (var parameter in new[]
                  {
@@ -428,7 +437,7 @@ public sealed class SqliteScanHistoryStore : IScanHistoryStore
                      "$reputation_classification", "$reputation_malware_family",
                      "$reputation_source", "$reputation_first_seen_utc", "$signature_status",
                      "$signature_engine", "$hash_error", "$reputation_error", "$signature_error"
-                     , "$portable_executable_json"
+                     , "$portable_executable_json", "$risk_assessment_json"
                  })
         {
             command.Parameters.Add(parameter, SqliteType.Text);
@@ -505,6 +514,9 @@ public sealed class SqliteScanHistoryStore : IScanHistoryStore
         command.Parameters["$portable_executable_json"].Value = file.PortableExecutable is null
             ? DBNull.Value
             : JsonSerializer.Serialize(file.PortableExecutable, PortableExecutableJsonOptions);
+        command.Parameters["$risk_assessment_json"].Value = file.Risk is null
+            ? DBNull.Value
+            : JsonSerializer.Serialize(file.Risk, PortableExecutableJsonOptions);
     }
 
     private static void SetMatchParameters(
@@ -578,7 +590,8 @@ public sealed class SqliteScanHistoryStore : IScanHistoryStore
                    reputation_status, reputation_classification, reputation_malware_family,
                    reputation_source, reputation_first_seen_utc, signature_status,
                    signature_engine, signature_match_count, hash_error,
-                   reputation_error, signature_error, portable_executable_json
+                   reputation_error, signature_error, portable_executable_json,
+                   risk_assessment_json
             FROM scan_history_files
             WHERE scan_id = $scan_id
             ORDER BY ordinal;
@@ -613,7 +626,10 @@ public sealed class SqliteScanHistoryStore : IScanHistoryStore
                     reader.IsDBNull(17) ? null : reader.GetString(17),
                     reader.IsDBNull(18)
                         ? null
-                        : ReadPortableExecutable(reader.GetString(18))));
+                        : ReadPortableExecutable(reader.GetString(18)),
+                    reader.IsDBNull(19)
+                        ? null
+                        : ReadRiskAssessment(reader.GetString(19))));
             }
         }
 
@@ -651,7 +667,8 @@ public sealed class SqliteScanHistoryStore : IScanHistoryStore
                 row.HashError,
                 row.ReputationError,
                 row.SignatureError,
-                row.PortableExecutable));
+                row.PortableExecutable,
+                row.Risk));
         }
 
         return files;
@@ -898,6 +915,21 @@ public sealed class SqliteScanHistoryStore : IScanHistoryStore
             .ConfigureAwait(false);
     }
 
+    private static async ValueTask ApplyVersionThreeAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        CancellationToken cancellationToken)
+    {
+        const string schema =
+            """
+            ALTER TABLE scan_history_files
+                ADD COLUMN risk_assessment_json TEXT NULL;
+            PRAGMA user_version = 3;
+            """;
+        await ExecuteNonQueryAsync(connection, schema, transaction, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
     private static async ValueTask ExecuteNonQueryAsync(
         SqliteConnection connection,
         string commandText,
@@ -925,6 +957,23 @@ public sealed class SqliteScanHistoryStore : IScanHistoryStore
         {
             throw new ScanHistoryStoreException(
                 "The history database contains invalid portable-executable facts.",
+                exception);
+        }
+    }
+
+    private static ScanHistoryRiskAssessment ReadRiskAssessment(string value)
+    {
+        try
+        {
+            return JsonSerializer.Deserialize<ScanHistoryRiskAssessment>(
+                    value,
+                    PortableExecutableJsonOptions) ??
+                throw new JsonException();
+        }
+        catch (JsonException exception)
+        {
+            throw new ScanHistoryStoreException(
+                "The history database contains an invalid risk assessment.",
                 exception);
         }
     }
@@ -997,5 +1046,6 @@ public sealed class SqliteScanHistoryStore : IScanHistoryStore
         string? HashError,
         string? ReputationError,
         string? SignatureError,
-        ScanHistoryPortableExecutable? PortableExecutable);
+        ScanHistoryPortableExecutable? PortableExecutable,
+        ScanHistoryRiskAssessment? Risk);
 }

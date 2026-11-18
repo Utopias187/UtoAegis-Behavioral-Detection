@@ -1,5 +1,6 @@
 using UtoAegis.Core.PortableExecutable;
 using UtoAegis.Core.Reputation;
+using UtoAegis.Core.RiskScoring;
 using UtoAegis.Core.Scanning;
 using UtoAegis.Core.Signatures;
 
@@ -36,6 +37,7 @@ public sealed class CompositeFileScannerTests
         Assert.AreSame(hashResult, result.FileHash);
         Assert.IsNull(result.Reputation);
         Assert.IsNull(result.Signatures);
+        Assert.AreEqual(RiskVerdict.Inconclusive, result.Risk?.Verdict);
         Assert.IsFalse(result.IsCompleted);
         Assert.AreEqual(0, reputationStore.LookupCount);
         Assert.AreEqual(0, signatureScanner.ScanCount);
@@ -156,6 +158,9 @@ public sealed class CompositeFileScannerTests
             PortableExecutableAnalysisStatus.Analyzed,
             result.PortableExecutable.Status);
         Assert.IsNotNull(result.PortableExecutable.ImageFacts.ManagedMetadata);
+        Assert.IsNotNull(result.Risk);
+        Assert.AreEqual(RiskVerdict.NoKnownThreat, result.Risk.Verdict);
+        Assert.AreEqual(RiskScoringPolicy.Default.PolicyId, result.Risk.HeuristicScore.PolicyId);
     }
 
     private static FileHashScanResult SuccessfulHash(string path) =>

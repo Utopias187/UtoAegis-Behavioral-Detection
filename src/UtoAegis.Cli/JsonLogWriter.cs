@@ -4,6 +4,7 @@ using UtoAegis.Core.Monitoring;
 using UtoAegis.Core.PortableExecutable;
 using UtoAegis.Core.Quarantine;
 using UtoAegis.Core.Reputation;
+using UtoAegis.Core.RiskScoring;
 using UtoAegis.Core.Scanning;
 using UtoAegis.Core.Signatures;
 
@@ -101,6 +102,32 @@ internal static class JsonLogWriter
             isManaged = result.ImageFacts.ManagedMetadata is not null,
             certificateCount = result.ImageFacts.Certificates.Count,
             overlaySize = result.ImageFacts.Overlay.OverlaySize
+        };
+
+        Console.Error.WriteLine(JsonSerializer.Serialize(logEntry, SerializerOptions));
+    }
+
+    public static void RiskAssessmentFinished(Guid scanId, FileRiskAssessment result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        var logEntry = new
+        {
+            timestampUtc = DateTimeOffset.UtcNow,
+            level = result.Verdict == RiskVerdict.Inconclusive ? "warning" : "information",
+            eventName = "risk_assessment_completed",
+            scanId,
+            verdict = result.Verdict.ToString(),
+            result.Confidence,
+            policyId = result.HeuristicScore.PolicyId,
+            policyVersion = result.HeuristicScore.PolicyVersion,
+            score = result.HeuristicScore.Score,
+            result.HasExactDetection,
+            topFeatureIds = result.HeuristicScore.Contributions
+                .Where(item => item.AppliedPoints > 0)
+                .OrderByDescending(item => item.AppliedPoints)
+                .ThenBy(item => item.FeatureId, StringComparer.Ordinal)
+                .Take(5)
+                .Select(item => item.FeatureId)
         };
 
         Console.Error.WriteLine(JsonSerializer.Serialize(logEntry, SerializerOptions));
@@ -218,7 +245,10 @@ internal static class JsonLogWriter
             path = result.Path,
             changeKind = result.ChangeKind.ToString(),
             detected = result.Result.IsDetected,
-            completed = result.Result.IsCompleted
+            completed = result.Result.IsCompleted,
+            riskVerdict = result.Result.Risk?.Verdict.ToString(),
+            riskScore = result.Result.Risk?.HeuristicScore.Score,
+            riskConfidence = result.Result.Risk?.Confidence
         };
 
         Console.Error.WriteLine(JsonSerializer.Serialize(logEntry, SerializerOptions));

@@ -22,7 +22,8 @@ public sealed record ScanHistoryFile(
     string? HashError,
     string? ReputationError,
     string? SignatureError,
-    ScanHistoryPortableExecutable? PortableExecutable = null)
+    ScanHistoryPortableExecutable? PortableExecutable = null,
+    ScanHistoryRiskAssessment? Risk = null)
 {
     public static ScanHistoryFile FromResult(string path, FileScanResult result)
     {
@@ -56,6 +57,7 @@ public sealed record ScanHistoryFile(
             result.Signatures?.ErrorMessage,
             result.PortableExecutable is null
                 ? null
-                : ScanHistoryPortableExecutable.FromResult(result.PortableExecutable));
+                : ScanHistoryPortableExecutable.FromResult(result.PortableExecutable),
+            result.Risk is null ? null : ScanHistoryRiskAssessment.FromResult(result.Risk));
     }
 }

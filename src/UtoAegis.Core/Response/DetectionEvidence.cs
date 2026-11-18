@@ -35,6 +35,12 @@ public static class DetectionEvidence
             evidence.Add($"signature-match-count:{ruleIds.Length}");
         }
 
+        if (result.Risk is { IsDetection: true, HasExactDetection: false } risk &&
+            evidence.Count < QuarantineRequest.MaximumEvidenceCount)
+        {
+            evidence.Add($"risk-heuristic:{risk.HeuristicScore.PolicyId}:v{risk.HeuristicScore.PolicyVersion}");
+        }
+
         return evidence;
     }
 }
